@@ -30,7 +30,6 @@ extern const char root_end[] asm("_binary_root_html_end");
 
 static const char *TAG = "example";
 
-esp_netif_t *s_ap_netif = NULL;
 int ws_fd[EXAMPLE_MAX_STA_CONN] = { -1 };
 httpd_handle_t server = NULL;
 const char *PORTAL_HTML =
@@ -40,14 +39,12 @@ const char *PORTAL_HTML =
         "<title>ESP32 WS</title>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         "<style type='text/css'>"
-
-        "/* ベース */ body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; line-height: 1.6; max-width: 900px; margin-left: auto; margin-right: auto; }" 
-        "/* テキスト */ h1, h2, h3 { line-height: 1.2; } "
-        "/* ボタン */ button { padding: 0.6em 1.2em; font-size: 1rem; border: none; border-radius: 0.5em; background: #0078ff; color: white; cursor: pointer; } button:hover { background: #005fcc; } "
-        "/* 画像や動画は親幅に合わせる */ img, video { max-width: 100%; height: auto; display: block; margin: 1rem 0; } "
-        "/* スマホ～タブレット用（幅が狭いとき） */ @media (max-width: 600px) { body { padding: 0.8rem; font-size: 0.95rem; } button { width: 100%; } } "
-        "/* タブレット～PC用（幅が広いとき） */ @media (min-width: 601px) { body { font-size: 1.05rem; } }"
-
+        "body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; line-height: 1.6; max-width: 900px; margin-left: auto; margin-right: auto; }" 
+        "h1, h2, h3 { line-height: 1.2; } "
+        "button { padding: 0.6em 1.2em; font-size: 1rem; border: none; border-radius: 0.5em; background: #0078ff; color: white; cursor: pointer; } button:hover { background: #005fcc; } "
+        "img, video { max-width: 100%; height: auto; display: block; margin: 1rem 0; } "
+        "@media (max-width: 600px) { body { padding: 0.8rem; font-size: 0.95rem; } button { width: 100%; } } "
+        "@media (min-width: 601px) { body { font-size: 1.05rem; } }"
         "</style>"
         "</head>"
         "<body>"
@@ -58,7 +55,6 @@ const char *PORTAL_HTML =
         "let ws = new WebSocket('ws://' + location.host + '/ws');"
         "ws.onmessage = function(evt) { document.getElementById('time').innerText = evt.data; };"
         "function toggleLED() { ws.send('toggle'); }"
-        //"window.onbeforeunload = function() { if (ws.readyState === WebSocket.OPEN) { ws.send('window.onbeforeunload'); }"
         "</script>"
         "</body>"
         "</html>";
@@ -85,27 +81,25 @@ static void wifi_init_softap(void)
 
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
     
-    // AP IP を 4.3.2.1 に設定
-    esp_netif_ip_info_t ip_info;
-    esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_AP_DEF"), &ip_info);
-    IP4_ADDR(&ip_info.ip, 4, 3, 2, 1);
-    IP4_ADDR(&ip_info.gw, 4, 3, 2, 1);
-    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
-    esp_netif_dhcps_stop(s_ap_netif);
-    esp_netif_set_ip_info(s_ap_netif, &ip_info);
-#ifdef CONFIG_ESP_ENABLE_DHCP_CAPTIVEPORTAL
     esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
-    char ip_addr_[16];
-    inet_ntoa_r(ip_info.ip.addr, ip_addr_, 16);
-    ESP_LOGI(TAG, "Set up softAP with IP: %s", ip_addr_);
-    char* captiveportal_uri = (char*) malloc(32 * sizeof(char));
-    assert(captiveportal_uri && "Failed to allocate captiveportal_uri");
-    strcpy(captiveportal_uri, "http://");
-    strcat(captiveportal_uri, ip_addr_);
-    ESP_ERROR_CHECK(esp_netif_dhcps_option(netif, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI, captiveportal_uri, strlen(captiveportal_uri)));
-#endif // CONFIG_ESP_ENABLE_DHCP_CAPTIVEPORTAL
-    esp_netif_dhcps_start(s_ap_netif);
+    esp_netif_dhcps_stop(netif);
+    {
+        // AP IP を 4.3.2.1 に設定
+        esp_netif_ip_info_t ip_info;
+        esp_netif_get_ip_info(netif, &ip_info);
+        IP4_ADDR(&ip_info.ip, 4, 3, 2, 1);
+        IP4_ADDR(&ip_info.gw, 4, 3, 2, 1);
+        IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
+        esp_netif_set_ip_info(netif, &ip_info);
 
+        // Captive Portal URL を設定
+        char captiveportal_uri[32];
+        snprintf(captiveportal_uri, sizeof(captiveportal_uri), "http://" IPSTR, IP2STR(&ip_info.ip));
+        ESP_ERROR_CHECK(esp_netif_dhcps_option(netif, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI, captiveportal_uri, strlen(captiveportal_uri)));
+    }
+    esp_netif_dhcps_start(netif);
+
+    // Wifi AP 起動
     wifi_config_t wifi_config = {
         .ap = {
             .ssid = EXAMPLE_ESP_WIFI_SSID,
@@ -118,56 +112,21 @@ static void wifi_init_softap(void)
     if (strlen(EXAMPLE_ESP_WIFI_PASS) == 0) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
-
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
     esp_netif_ip_info_t ip_info_;
     esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_AP_DEF"), &ip_info_);
-
-    char ip_addr[16];
-    inet_ntoa_r(ip_info_.ip.addr, ip_addr, 16);
-    ESP_LOGI(TAG, "Set up softAP with IP: %s", ip_addr);
-
+    ESP_LOGI(TAG, "Set up softAP with IP: " IPSTR, IP2STR(&ip_info_.ip));
     ESP_LOGI(TAG, "wifi_init_softap finished. SSID:'%s' password:'%s'",
              EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
 }
 
-#ifdef CONFIG_ESP_ENABLE_DHCP_CAPTIVEPORTAL
-static void dhcp_set_captiveportal_url(void) {
-    // get the IP of the access point to redirect to
-    esp_netif_ip_info_t ip_info;
-
-    // get a handle to configure DHCP with
-    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
-
-    // set the DHCP option 114
-    IP4_ADDR(&ip_info.ip, 4, 3, 2, 1);
-    IP4_ADDR(&ip_info.gw, 4, 3, 2, 1);
-    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
-    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_dhcps_stop(netif));
-    esp_netif_set_ip_info(s_ap_netif, &ip_info);
-    esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_AP_DEF"), &ip_info);
-
-    char ip_addr[16];
-    inet_ntoa_r(ip_info.ip.addr, ip_addr, 16);
-    ESP_LOGI(TAG, "Set up softAP with IP: %s", ip_addr);
-
-    // turn the IP into a URI
-    char* captiveportal_uri = (char*) malloc(32 * sizeof(char));
-    assert(captiveportal_uri && "Failed to allocate captiveportal_uri");
-    strcpy(captiveportal_uri, "http://");
-    strcat(captiveportal_uri, ip_addr);
-    ESP_ERROR_CHECK(esp_netif_dhcps_option(netif, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI, captiveportal_uri, strlen(captiveportal_uri)));
-    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_dhcps_start(netif));
-}
-#endif // CONFIG_ESP_ENABLE_DHCP_CAPTIVEPORTAL
-
 // HTTP GET Handler
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    const uint32_t root_len = root_end - root_start;
+    //const uint32_t root_len = root_end - root_start;
 
     ESP_LOGI(TAG, "Serve root");
     httpd_resp_set_type(req, "text/html");
@@ -179,6 +138,7 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 
 // WS Handler
 static esp_err_t ws_handler(httpd_req_t *req) {
+    int sock_fd = httpd_req_to_sockfd(req);
     
     // WebSocket connection establish
     if (req->method == HTTP_GET)
@@ -191,11 +151,11 @@ static esp_err_t ws_handler(httpd_req_t *req) {
         // }
         for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++) {
             if (ws_fd[i] == -1) {
-                ws_fd[i] = httpd_req_to_sockfd(req); // Store the WebSocket handle
+                ws_fd[i] = sock_fd;
                 break;
             }
         }
-        ESP_LOGI(TAG, "WebSocket connection established (%d)", httpd_req_to_sockfd(req));
+        ESP_LOGI(TAG, "WebSocket connection established (%d)", sock_fd);
         return ESP_OK;
     }
 
@@ -230,6 +190,22 @@ static esp_err_t ws_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+static esp_err_t redirect_handler(httpd_req_t *req) {
+    ESP_LOGD(TAG, "Redirect else request: %s", req->uri);
+    
+    esp_netif_ip_info_t ip_info;
+    esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_AP_DEF"), &ip_info);
+    char redirect_url[64];
+    snprintf(redirect_url, sizeof(redirect_url), "http://" IPSTR "/", IP2STR(&ip_info.ip));
+
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_hdr(req, "Location", redirect_url);
+    // iOS requires content in the response to detect a captive portal, simply redirecting is not sufficient.
+    httpd_resp_send(req, "Redirect to the captive portal", HTTPD_RESP_USE_STRLEN);
+
+    return ESP_OK;
+}
+
 static const httpd_uri_t root = {
     .uri = "/",
     .method = HTTP_GET,
@@ -244,21 +220,17 @@ static const httpd_uri_t ws_uri = {
     .is_websocket = true
 };
 
-static esp_err_t redirect_handler(httpd_req_t *req) {
-    ESP_LOGD(TAG, "Redirect else request: %s", req->uri);
-
-    httpd_resp_set_status(req, "302 Found");
-    httpd_resp_set_hdr(req, "Location", "http://4.3.2.1/");
-    httpd_resp_send(req, NULL, 0);
-    return ESP_OK;
-}
+static const httpd_uri_t redirect_uri = {
+    .uri = "/*",
+    .method = HTTP_GET,
+    .handler = redirect_handler,
+    .user_ctx = NULL
+};
 
 // HTTP Error (404) Handler - Redirects all requests to the root page
 esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
 {
-    // Set status
     httpd_resp_set_status(req, "302 Temporary Redirect");
-    // Redirect to the "/" root directory
     httpd_resp_set_hdr(req, "Location", "/");
     // iOS requires content in the response to detect a captive portal, simply redirecting is not sufficient.
     httpd_resp_send(req, "Redirect to the captive portal", HTTPD_RESP_USE_STRLEN);
@@ -282,13 +254,7 @@ static httpd_handle_t start_webserver(void)
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &root);
         httpd_register_uri_handler(server, &ws_uri);
-        httpd_uri_t wildcard = {
-            .uri = "/*",
-            .method = HTTP_GET,
-            .handler = redirect_handler,
-            .user_ctx = NULL
-        };
-        httpd_register_uri_handler(server, &wildcard);
+        httpd_register_uri_handler(server, &redirect_uri);
         httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
     }
     return server;
@@ -354,15 +320,10 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     // Initialize Wi-Fi including netif with default config
-    s_ap_netif = esp_netif_create_default_wifi_ap();
+    esp_netif_create_default_wifi_ap();
 
     // Initialise ESP32 in SoftAP mode
     wifi_init_softap();
-
-    // Configure DNS-based captive portal, if configured
-    #ifdef CONFIG_ESP_ENABLE_DHCP_CAPTIVEPORTAL
-        //dhcp_set_captiveportal_url();
-    #endif
 
     // Start the server for the first time
     server = start_webserver();

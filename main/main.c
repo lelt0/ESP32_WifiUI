@@ -333,7 +333,7 @@ void time_task(void *arg) {
     }
 }
 
-extern "C" void app_main(void)
+void app_main(void)
 {
     for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++) ws_fd[i] = -1;
 

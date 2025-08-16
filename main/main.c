@@ -259,7 +259,6 @@ static httpd_handle_t start_webserver(void)
     }
     return server;
 }
-
 bool send_all(const char *message, size_t len)
 {
     httpd_ws_frame_t ws_pkt;
@@ -276,7 +275,7 @@ bool send_all(const char *message, size_t len)
             ws_pkt.len = strlen(buf);
             ws_pkt.type = HTTPD_WS_TYPE_TEXT;
             esp_err_t ret = httpd_ws_send_frame_async(server, ws_fd[i], &ws_pkt);
-            //esp_err_t ret = httpd_ws_send_data_async(server, ws_fd[i], &ws_pkt, NULL, NULL);
+            //esp_err_t ret = httpd_ws_send_data(server, ws_fd[i], &ws_pkt);
             ESP_LOGI(TAG, "send %s", buf);
             if (ret != ESP_OK) {
                 ESP_LOGI(TAG, "send failed with %d", ret);

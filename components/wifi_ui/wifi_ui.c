@@ -18,6 +18,7 @@
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "lwip/inet.h"
+#include "lwip/netdb.h"
 
 #include "dns_server.h"
 #include "wifi_ui.h"
@@ -28,7 +29,12 @@
 
 static const char *TAG = "wifi_ui";
 
-static int ws_fd[EXAMPLE_MAX_STA_CONN] = { -1 };
+typedef struct {
+    int fd;
+    esp_ip4_addr_t ip_addr;
+} websocket_client_t;
+
+static websocket_client_t ws_cilents[EXAMPLE_MAX_STA_CONN];
 static httpd_handle_t server = NULL;
 
 static const char *PORTAL_HTML =
@@ -135,7 +141,30 @@ static esp_err_t root_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-#include <lwip/netdb.h>
+static esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd)
+{
+    struct sockaddr_in6 addr;
+    socklen_t addr_len = sizeof(addr);
+    int peer_ret = getpeername(sockfd, (struct sockaddr *)&addr, &addr_len);
+
+    if (peer_ret == 0) {
+        if (addr.sin6_family == AF_INET6) {
+            esp_ip4_addr_t ip_addr;
+            ip_addr.addr = (uint32_t)addr.sin6_addr.un.u32_addr[3]; // IPv6 mapped IPv4 address
+            return ip_addr;
+        } else if (addr.sin6_family == AF_INET) {
+            esp_ip4_addr_t ip_addr;
+            struct sockaddr_in *addr4 = (struct sockaddr_in *)&addr;
+            ip_addr.addr = (uint32_t)addr4->sin_addr.s_addr;
+            return ip_addr;
+        } else {
+            return (esp_ip4_addr_t){0};
+        }
+    } else {
+        return (esp_ip4_addr_t){0};
+    }
+}
+
 // WS Handler
 static esp_err_t ws_handler(httpd_req_t *req) {
     int sock_fd = httpd_req_to_sockfd(req);
@@ -143,35 +172,30 @@ static esp_err_t ws_handler(httpd_req_t *req) {
     // WebSocket connection establish
     if (req->method == HTTP_GET)
     {
-        int i;
-        for(i = 0; i < EXAMPLE_MAX_STA_CONN; i++) {
-            if (ws_fd[i] == -1) {
-                ws_fd[i] = sock_fd;
+        esp_ip4_addr_t connected_ip_addr = get_client_ip_addr(req, sock_fd);
+        bool override = false;
+        for(int exist_cli_i = 0; exist_cli_i < EXAMPLE_MAX_STA_CONN; exist_cli_i++) {
+            if (ws_cilents[exist_cli_i].ip_addr.addr == connected_ip_addr.addr) {
+                ws_cilents[exist_cli_i].fd = sock_fd;
+                override = true;
+                ESP_LOGW(TAG, "Only last connect is vaid per device (" IPSTR ")", IP2STR(&connected_ip_addr));
                 break;
             }
         }
-        ESP_LOGI(TAG, "WebSocket connection established (%d)", sock_fd);
-        if(i == EXAMPLE_MAX_STA_CONN) {
-            ESP_LOGW(TAG, "Max WebSocket clients reached (%d)", i);
-        }
-        struct sockaddr_in6 addr;
-        socklen_t addr_len = sizeof(addr);
-        int peer_ret = getpeername(sock_fd, (struct sockaddr *)&addr, &addr_len);
-
-        char ip_str[INET6_ADDRSTRLEN];
-        if (peer_ret == 0) {
-            if (addr.sin6_family == AF_INET6) {
-                inet_ntop(AF_INET6, &addr.sin6_addr, ip_str, sizeof(ip_str));
-            } else if (addr.sin6_family == AF_INET) {
-                struct sockaddr_in *addr4 = (struct sockaddr_in *)&addr;
-                inet_ntop(AF_INET, &addr4->sin_addr, ip_str, sizeof(ip_str));
-            } else {
-                strcpy(ip_str, "unknown");
+        if(!override) {
+            int exist_cli_i;
+            for(exist_cli_i = 0; exist_cli_i < EXAMPLE_MAX_STA_CONN; exist_cli_i++) {
+                if (ws_cilents[exist_cli_i].fd < 0) {
+                    ws_cilents[exist_cli_i].fd = sock_fd;
+                    ws_cilents[exist_cli_i].ip_addr = connected_ip_addr;
+                    break;
+                }
             }
-        } else {
-            strcpy(ip_str, "error");
+            if(exist_cli_i == EXAMPLE_MAX_STA_CONN) {
+                ESP_LOGW(TAG, "Max WebSocket clients reached (fd: %d)", EXAMPLE_MAX_STA_CONN);
+            }
         }
-        ESP_LOGI(TAG, "WebSocket client %d connected from %s (ret:%d)", i, ip_str, peer_ret); 
+        ESP_LOGI(TAG, "WebSocket connection established from " IPSTR " (%d)", IP2STR(&connected_ip_addr), sock_fd);
         return ESP_OK;
     }
 
@@ -284,23 +308,24 @@ bool send_all(const char *message, size_t len)
     // ws_pkt.len = len;
     for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++)
     {
-        if(ws_fd[i] >= 0)
+        if(ws_cilents[i].fd >= 0)
         {
             char buf[64];
-            snprintf(buf, 64, "%s (your fd is %d)", message, ws_fd[i]);
+            snprintf(buf, 64, "%s (your fd is %d)", message, ws_cilents[i].fd);
             ws_pkt.payload = (uint8_t *)buf;
             ws_pkt.len = strlen(buf);
             ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-            esp_err_t ret = httpd_ws_send_frame_async(server, ws_fd[i], &ws_pkt);
-            //esp_err_t ret = httpd_ws_send_data(server, ws_fd[i], &ws_pkt);
+            esp_err_t ret = httpd_ws_send_frame_async(server, ws_cilents[i].fd, &ws_pkt);
+            //esp_err_t ret = httpd_ws_send_data(server, ws_cilents[i].fd, &ws_pkt);
             ESP_LOGI(TAG, "send %s", buf);
             if (ret != ESP_OK) {
                 ESP_LOGI(TAG, "send failed with %d", ret);
-                ws_fd[i] = -1;
+                ws_cilents[i].fd = -1;
+                ws_cilents[i].ip_addr.addr = 0;
             }
         }
     }
-    ESP_LOGI(TAG, "ws_fd: %d %d %d %d", ws_fd[0], ws_fd[1], ws_fd[2], ws_fd[3]);
+    ESP_LOGI(TAG, "ws_fd: %d %d %d %d", ws_cilents[0].fd, ws_cilents[1].fd, ws_cilents[2].fd, ws_cilents[3].fd);
     return true;
 }
 
@@ -311,7 +336,7 @@ void wifiui_start(wifiui_config_t *config)
         return;
     }
 
-    for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++) ws_fd[i] = -1;
+    for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++){ ws_cilents[i].fd = -1; ws_cilents[i].ip_addr.addr = 0; }
 
     /*
         Turn of warnings from HTTP server as redirecting traffic will yield

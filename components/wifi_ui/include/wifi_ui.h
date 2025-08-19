@@ -11,8 +11,10 @@ typedef struct {
     void* arg;
 } wifiui_config_t;
 
-void wifiui_start(wifiui_config_t *config);
-bool send_all(const char *message, size_t len);
+void wifiui_start(wifiui_config_t *config, void (*led_callback)(void*));
+bool send_status(const char *message, size_t len);
+bool send_log(const char *message, size_t len);
+esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst);
 
 #ifdef __cplusplus
 }

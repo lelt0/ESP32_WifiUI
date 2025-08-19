@@ -23,9 +23,8 @@
 #include "dns_server.h"
 #include "wifi_ui.h"
 
-#define EXAMPLE_ESP_WIFI_SSID "esp32-portal"
 #define EXAMPLE_ESP_WIFI_PASS ""
-#define EXAMPLE_MAX_STA_CONN 4
+#define EXAMPLE_MAX_STA_CONN 2
 
 static const char *TAG = "wifi_ui";
 
@@ -35,34 +34,20 @@ typedef struct {
 } websocket_client_t;
 
 static websocket_client_t ws_cilents[EXAMPLE_MAX_STA_CONN];
+static websocket_client_t ws_log_cilents[EXAMPLE_MAX_STA_CONN];
+void (*led_callback_func)(void*) = NULL;
 static httpd_handle_t server = NULL;
 
 static const char *PORTAL_HTML =
-        "<!DOCTYPE html>"
-        "<html>"
-        "<head>"
-        "<title>ESP32 WS</title>"
-        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-        "<style type='text/css'>"
-        "body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; line-height: 1.6; max-width: 900px; margin-left: auto; margin-right: auto; }" 
-        "h1, h2, h3 { line-height: 1.2; } "
-        "button { padding: 0.6em 1.2em; font-size: 1rem; border: none; border-radius: 0.5em; background: #0078ff; color: white; cursor: pointer; } button:hover { background: #005fcc; } "
-        "img, video { max-width: 100%; height: auto; display: block; margin: 1rem 0; } "
-        "@media (max-width: 600px) { body { padding: 0.8rem; font-size: 0.95rem; } button { width: 100%; } } "
-        "@media (min-width: 601px) { body { font-size: 1.05rem; } }"
-        "</style>"
-        "</head>"
-        "<body>"
-        "<h2>ESP32 WebSocket Demo</h2>"
-        "<button onclick='toggleLED()'>Toggle LED</button>"
-        "<p id='time'>--</p>"
-        "<script>"
-        "let ws = new WebSocket('ws://' + location.host + '/ws');"
-        "ws.onmessage = function(evt) { document.getElementById('time').innerText = evt.data; };"
-        "function toggleLED() { ws.send('toggle'); }"
-        "</script>"
-        "</body>"
-        "</html>";
+#include "sample.html"
+;
+
+void create_ssid(char * dst, unsigned int dst_len)
+{
+    uint8_t mac[6] = {0};
+    esp_wifi_get_mac(WIFI_IF_AP, mac);
+    snprintf(dst, dst_len, "esp32-%02X%02X%02X", mac[3], mac[4], mac[5]);
+}
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
@@ -107,9 +92,9 @@ static void wifi_init_softap(void)
     // Wifi AP 起動
     wifi_config_t wifi_config = {
         .ap = {
-            .ssid = EXAMPLE_ESP_WIFI_SSID,
+            //.ssid = ap_ssid,
             .password = EXAMPLE_ESP_WIFI_PASS,
-            .ssid_len = strlen(EXAMPLE_ESP_WIFI_SSID),
+            //.ssid_len = strlen(ap_ssid),
             .authmode = WIFI_AUTH_WPA_WPA2_PSK,
             .max_connection = EXAMPLE_MAX_STA_CONN
         },
@@ -117,7 +102,9 @@ static void wifi_init_softap(void)
     if (strlen(EXAMPLE_ESP_WIFI_PASS) == 0) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+    create_ssid((char*)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid));
+    wifi_config.ap.ssid_len = strlen((char*)wifi_config.ap.ssid);
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
@@ -125,20 +112,74 @@ static void wifi_init_softap(void)
     esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_AP_DEF"), &ip_info_);
     ESP_LOGI(TAG, "Set up softAP with IP: " IPSTR, IP2STR(&ip_info_.ip));
     ESP_LOGI(TAG, "wifi_init_softap finished. SSID:'%s' password:'%s'",
-             EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+             wifi_config.ap.ssid, EXAMPLE_ESP_WIFI_PASS);
 }
 
 // HTTP GET Handler
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    //const uint32_t root_len = root_end - root_start;
+    if(req->method == HTTP_GET) {
+        ESP_LOGI(TAG, "Serve root");
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_send(req, PORTAL_HTML, HTTPD_RESP_USE_STRLEN);
 
-    ESP_LOGI(TAG, "Serve root");
-    httpd_resp_set_type(req, "text/html");
-    //httpd_resp_send(req, root_start, root_len);
-    httpd_resp_send(req, PORTAL_HTML, HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }else if(req->method == HTTP_POST) {
+        ESP_LOGI(TAG, "POST");
 
+        char query[32];
+        char param[16];
+        if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+            ESP_LOGI(TAG, "Found URL query => %s", query);
+            if (httpd_query_key_value(query, "id", param, sizeof(param)) == ESP_OK) {
+                ESP_LOGI(TAG, "Found URL query parameter => id=%s", param);
+                if(strcmp(param, "0001") == 0)
+                {
+                    if (led_callback_func) led_callback_func(NULL); // Call the LED callback function
+                }
+                else if(strcmp(param, "0002") == 0)
+                {
+                    char buf[100];
+                    int ret = httpd_req_recv(req, buf, sizeof(buf)-1);
+                    if (ret > 0) {
+                        buf[ret] = 0;
+                        ESP_LOGI("WEB", "POST body: %s", buf); // username=xxx&password=yyy
+
+                        wifi_config_t sta_config = {
+                            .sta = {
+                                //.ssid = ssid,
+                                //.password = password,
+                                .threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK,
+                            },
+                        };
+                        httpd_query_key_value(buf, "ssid", (char*)sta_config.sta.ssid, sizeof(sta_config.sta.ssid));
+                        httpd_query_key_value(buf, "password", (char*)sta_config.sta.password, sizeof(sta_config.sta.password));
+                        ESP_LOGI(TAG, "ssid:%s pass:%s", sta_config.sta.ssid, sta_config.sta.password);
+                        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_config));
+                        ESP_ERROR_CHECK(esp_wifi_connect());
+
+                        uint8_t mac[6] = {0};
+                        esp_err_t ret = esp_wifi_get_mac(WIFI_IF_STA, mac);
+                        printf("MAC(WIFI_IF_STA): %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                        ret = esp_wifi_get_mac(WIFI_IF_AP, mac);
+                        printf("MAC(WIFI_IF_AP): %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+                        //httpd_resp_send(req, "received", HTTPD_RESP_USE_STRLEN);
+                    }
+                }
+            }
+        }
+
+        return ESP_OK;
+    }
     return ESP_OK;
+}
+
+esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst)
+{
+    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if(!sta_netif) return ESP_FAIL;
+    return esp_netif_get_ip_info(sta_netif, dst);
 }
 
 static esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd)
@@ -178,7 +219,7 @@ static esp_err_t ws_handler(httpd_req_t *req) {
             if (ws_cilents[exist_cli_i].ip_addr.addr == connected_ip_addr.addr) {
                 ws_cilents[exist_cli_i].fd = sock_fd;
                 override = true;
-                ESP_LOGW(TAG, "Only last connect is vaid per device (" IPSTR ")", IP2STR(&connected_ip_addr));
+                ESP_LOGW(TAG, "[STS_WS] Only last connect is vaid per device (" IPSTR ")", IP2STR(&connected_ip_addr));
                 break;
             }
         }
@@ -192,10 +233,10 @@ static esp_err_t ws_handler(httpd_req_t *req) {
                 }
             }
             if(exist_cli_i == EXAMPLE_MAX_STA_CONN) {
-                ESP_LOGW(TAG, "Max WebSocket clients reached (fd: %d)", EXAMPLE_MAX_STA_CONN);
+                ESP_LOGW(TAG, "[STS_WS] Max WebSocket clients reached (fd: %d)", EXAMPLE_MAX_STA_CONN);
             }
         }
-        ESP_LOGI(TAG, "WebSocket connection established from " IPSTR " (%d)", IP2STR(&connected_ip_addr), sock_fd);
+        ESP_LOGI(TAG, "[STS_WS] WebSocket connection established from " IPSTR " (%d)", IP2STR(&connected_ip_addr), sock_fd);
         return ESP_OK;
     }
 
@@ -206,26 +247,61 @@ static esp_err_t ws_handler(httpd_req_t *req) {
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0); // to get frame length
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "httpd_ws_recv_frame failed to get frame len with %d", ret);
+        ESP_LOGE(TAG, "[STS_WS] httpd_ws_recv_frame failed to get frame len with %d", ret);
         return ret;
     }
     if (ws_pkt.len)
     {
         uint8_t *buf = (uint8_t*)calloc(1, ws_pkt.len + 1);
         if (buf == NULL) {
-            ESP_LOGE(TAG, "Failed to calloc memory for buf");
+            ESP_LOGE(TAG, "[STS_WS] Failed to calloc memory for buf");
             return ESP_ERR_NO_MEM;
         }
         ws_pkt.payload = buf;
         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len); // to receive frame payload
         if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
+            ESP_LOGE(TAG, "[STS_WS] httpd_ws_recv_frame failed with %d", ret);
             free(buf);
             return ret;
         }
-        ESP_LOGI(TAG, "Packet type: %d", ws_pkt.type);
-        ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
+        ESP_LOGI(TAG, "[STS_WS] Packet type: %d", ws_pkt.type);
+        ESP_LOGI(TAG, "[STS_WS] Got packet with message: %s", ws_pkt.payload);
         free(buf);
+    }
+    return ESP_OK;
+}
+
+static esp_err_t ws_log_handler(httpd_req_t *req) {
+    int sock_fd = httpd_req_to_sockfd(req);
+    
+    // WebSocket connection establish
+    if (req->method == HTTP_GET)
+    {
+        esp_ip4_addr_t connected_ip_addr = get_client_ip_addr(req, sock_fd);
+        bool override = false;
+        for(int exist_cli_i = 0; exist_cli_i < EXAMPLE_MAX_STA_CONN; exist_cli_i++) {
+            if (ws_log_cilents[exist_cli_i].ip_addr.addr == connected_ip_addr.addr) {
+                ws_log_cilents[exist_cli_i].fd = sock_fd;
+                override = true;
+                ESP_LOGW(TAG, "[LOG_WS] Only last connect is vaid per device (" IPSTR ")", IP2STR(&connected_ip_addr));
+                break;
+            }
+        }
+        if(!override) {
+            int exist_cli_i;
+            for(exist_cli_i = 0; exist_cli_i < EXAMPLE_MAX_STA_CONN; exist_cli_i++) {
+                if (ws_log_cilents[exist_cli_i].fd < 0) {
+                    ws_log_cilents[exist_cli_i].fd = sock_fd;
+                    ws_log_cilents[exist_cli_i].ip_addr = connected_ip_addr;
+                    break;
+                }
+            }
+            if(exist_cli_i == EXAMPLE_MAX_STA_CONN) {
+                ESP_LOGW(TAG, "[LOG_WS] Max WebSocket clients reached (fd: %d)", EXAMPLE_MAX_STA_CONN);
+            }
+        }
+        ESP_LOGI(TAG, "[LOG_WS] WebSocket connection established from " IPSTR " (%d)", IP2STR(&connected_ip_addr), sock_fd);
+        return ESP_OK;
     }
     return ESP_OK;
 }
@@ -248,7 +324,7 @@ static esp_err_t redirect_handler(httpd_req_t *req) {
 
 static const httpd_uri_t root = {
     .uri = "/",
-    .method = HTTP_GET,
+    .method = HTTP_ANY,
     .handler = root_get_handler
 };
 
@@ -256,6 +332,14 @@ static const httpd_uri_t ws_uri = {
     .uri = "/ws",
     .method = HTTP_GET,
     .handler = ws_handler,
+    .user_ctx = NULL,
+    .is_websocket = true
+};
+
+static const httpd_uri_t ws_log_uri = {
+    .uri = "/ws_log",
+    .method = HTTP_GET,
+    .handler = ws_log_handler,
     .user_ctx = NULL,
     .is_websocket = true
 };
@@ -294,42 +378,62 @@ static httpd_handle_t start_webserver(void)
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &root);
         httpd_register_uri_handler(server, &ws_uri);
+        httpd_register_uri_handler(server, &ws_log_uri);
         httpd_register_uri_handler(server, &redirect_uri);
         httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
     }
     return server;
 }
 
-bool send_all(const char *message, size_t len)
+bool send_status(const char *message, size_t len)
 {
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    // ws_pkt.payload = (uint8_t *)message;
-    // ws_pkt.len = len;
+    ws_pkt.payload = (uint8_t *)message;
+    ws_pkt.len = len;
     for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++)
     {
         if(ws_cilents[i].fd >= 0)
         {
-            char buf[64];
-            snprintf(buf, 64, "%s (your fd is %d)", message, ws_cilents[i].fd);
-            ws_pkt.payload = (uint8_t *)buf;
-            ws_pkt.len = strlen(buf);
+            // char buf[64];
+            // snprintf(buf, 64, "%s (your fd is %d)", message, ws_cilents[i].fd);
+            // ws_pkt.payload = (uint8_t *)buf;
+            // ws_pkt.len = strlen(buf);
             ws_pkt.type = HTTPD_WS_TYPE_TEXT;
             esp_err_t ret = httpd_ws_send_frame_async(server, ws_cilents[i].fd, &ws_pkt);
             //esp_err_t ret = httpd_ws_send_data(server, ws_cilents[i].fd, &ws_pkt);
-            ESP_LOGI(TAG, "send %s", buf);
             if (ret != ESP_OK) {
-                ESP_LOGI(TAG, "send failed with %d", ret);
                 ws_cilents[i].fd = -1;
                 ws_cilents[i].ip_addr.addr = 0;
             }
         }
     }
-    ESP_LOGI(TAG, "ws_fd: %d %d %d %d", ws_cilents[0].fd, ws_cilents[1].fd, ws_cilents[2].fd, ws_cilents[3].fd);
     return true;
 }
 
-void wifiui_start(wifiui_config_t *config)
+bool send_log(const char *message, size_t len)
+{
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.payload = (uint8_t *)message;
+    ws_pkt.len = len;
+    for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++)
+    {
+        if(ws_log_cilents[i].fd >= 0)
+        {
+            ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+            esp_err_t ret = httpd_ws_send_frame_async(server, ws_log_cilents[i].fd, &ws_pkt);
+            //esp_err_t ret = httpd_ws_send_data(server, ws_log_cilents[i].fd, &ws_pkt);
+            if (ret != ESP_OK) {
+                ws_log_cilents[i].fd = -1;
+                ws_log_cilents[i].ip_addr.addr = 0;
+            }
+        }
+    }
+    return true;
+}
+
+void wifiui_start(wifiui_config_t *config, void (*led_callback)(void*))
 {
     if(server != NULL){
         ESP_LOGW(TAG, "server already started");
@@ -337,6 +441,8 @@ void wifiui_start(wifiui_config_t *config)
     }
 
     for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++){ ws_cilents[i].fd = -1; ws_cilents[i].ip_addr.addr = 0; }
+    for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++){ ws_log_cilents[i].fd = -1; ws_log_cilents[i].ip_addr.addr = 0; }
+    led_callback_func = led_callback;
 
     /*
         Turn of warnings from HTTP server as redirecting traffic will yield
@@ -355,6 +461,7 @@ void wifiui_start(wifiui_config_t *config)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     // Initialize Wi-Fi including netif with default config
+    esp_netif_create_default_wifi_sta();
     esp_netif_create_default_wifi_ap();
 
     // Initialise ESP32 in SoftAP mode

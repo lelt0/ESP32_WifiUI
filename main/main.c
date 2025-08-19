@@ -46,7 +46,7 @@ void status_send_task(void *arg) {
         send_status(buf, strlen(buf));
         ESP_LOGI(TAG, "sent: %.3lfs %d " IPSTR, time, led_status, IP2STR(&ip_info.ip));
 
-        if(count%5==0) print_connections(TAG);
+        if(count%10==0) print_connections(TAG);
 
         count++;
     }

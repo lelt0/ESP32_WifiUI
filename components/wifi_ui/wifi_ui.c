@@ -477,12 +477,11 @@ void print_connections(const char* tag)
     {
         buf_off += snprintf(buf + buf_off, sizeof(buf) - buf_off, "(%d,%d)", ws_status_cilents[cli_i].fd, ws_log_cilents[cli_i].fd);
     }
-    buf_off += snprintf(buf + buf_off, sizeof(buf) - buf_off, "\n");
     ESP_LOGI(tag, "%s", buf);
 
     uint8_t mac[6] = {0};
     esp_wifi_get_mac(WIFI_IF_AP, mac);
-    ESP_LOGI(tag, "MAC(AP IF): %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    ESP_LOGI(tag, "MAC(AP IF): %02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     esp_wifi_get_mac(WIFI_IF_STA, mac);
-    ESP_LOGI(tag, "MAC(STA IF): %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    ESP_LOGI(tag, "MAC(STA IF): %02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }

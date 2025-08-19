@@ -36,7 +36,7 @@ img, video { max-width: 100%; height: auto; display: block; margin: 1rem 0; }
 <textarea id="terminal" readonly></textarea>
 
 <script>
-let ws = new WebSocket('ws://' + location.host + '/ws');
+let ws = new WebSocket('ws://' + location.host + '/ws_status');
 let ws_log = new WebSocket('ws://' + location.host + '/ws_log');
 ws.onmessage = function(evt) {
     document.getElementById('status').innerText = evt.data;

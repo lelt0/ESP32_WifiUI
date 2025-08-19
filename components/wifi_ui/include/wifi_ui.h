@@ -16,6 +16,8 @@ bool send_status(const char *message, size_t len);
 bool send_log(const char *message, size_t len);
 esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst);
 
+void print_connections(const char* tag);
+
 #ifdef __cplusplus
 }
 #endif

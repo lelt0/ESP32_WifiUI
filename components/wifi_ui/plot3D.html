@@ -1,0 +1,30 @@
+R"(
+<!--<html><script src="/plotly-3.1.0.min.js"></script></html>-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <!--<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>-->
+  <script src="/plotly.min.js"></script>
+  <title>3D Scatter Plot</title>
+</head>
+<body>
+  <div id="plot" style="width:100%; height:100vh;"></div>
+  <script>
+    var socket = new WebSocket("ws://" + location.host + "/ws");
+    let data = JSON.parse('{"x": [1,2,3], "y": [4,5,6], "z": [7,8,9], "c": ["red","blue","green"]}');
+    let trace = {
+      x: data.x,
+      y: data.y,
+      z: data.z,
+      mode: 'markers',
+      type: 'scatter3d',
+      marker: { size: 4, color: data.c }
+    };
+    Plotly.newPlot('plot', [trace], {
+      margin: {l:0,r:0,b:0,t:0}
+    });
+  </script>
+</body>
+</html>
+)"

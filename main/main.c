@@ -9,15 +9,32 @@
 
 static const char *TAG = "example";
 
+static vprintf_like_t s_orig_vprintf = NULL;  // オリジナルのログ関数ポインタ
+static bool s_in_my_log = false;              // ログ関数再帰防止フラグ
 static int my_log_vprintf(const char *fmt, va_list args)
 {
-    char buf[256];
-    int len = vsnprintf(buf, sizeof(buf), fmt, args);
-    send_log(buf, len);
+    if (s_in_my_log) {
+        // すでに自分の中なら、オリジナルログ関数だけ呼んで終わり
+        return s_orig_vprintf(fmt, args);
+    }
 
-    vprintf(fmt, args);  // 元のシリアル出力
+    s_in_my_log = true;
 
-    return len;
+    static char buf[256];
+    va_list args_copy;
+    va_copy(args_copy, args);
+    int len = vsnprintf(buf, sizeof(buf), fmt, args_copy);
+    va_end(args_copy);
+
+    if (len > 0) {
+        send_log(buf, len);
+    }
+
+    // 元のログ関数でUART出力
+    int ret = s_orig_vprintf(fmt, args);
+
+    s_in_my_log = false;
+    return ret;
 }
 
 #define LED_GPIO 2
@@ -41,7 +58,7 @@ void status_send_task(void *arg) {
         get_current_sta_ip(&ip_info);
 
         // 出力
-        char buf[64];
+        static char buf[64];
         snprintf(buf, sizeof(buf), "time: %.3lfsec\nLED: %s\nSTA IP: " IPSTR, time, (led_status?"ON":"OFF"), IP2STR(&ip_info.ip));
         send_status(buf, strlen(buf));
         ESP_LOGI(TAG, "sent: %.3lfs %d " IPSTR, time, led_status, IP2STR(&ip_info.ip));
@@ -54,7 +71,7 @@ void status_send_task(void *arg) {
 
 void app_main(void)
 {
-    esp_log_set_vprintf(my_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
+    s_orig_vprintf = esp_log_set_vprintf(my_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
 
     gpio_reset_pin(LED_GPIO);
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);

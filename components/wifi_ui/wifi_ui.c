@@ -41,6 +41,9 @@ static httpd_handle_t server = NULL;
 static const char *PORTAL_HTML =
 #include "sample.html"
 ;
+static const char *PLOT3D_HTML =
+#include "plot3D.html"
+;
 
 void create_ssid(char * dst, unsigned int dst_len)
 {
@@ -118,13 +121,15 @@ static void wifi_init_softap(void)
 // HTTP GET Handler
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    if(req->method == HTTP_GET) {
+    if(req->method == HTTP_GET)
+    {
         ESP_LOGI(TAG, "Serve root");
         httpd_resp_set_type(req, "text/html");
         httpd_resp_send(req, PORTAL_HTML, HTTPD_RESP_USE_STRLEN);
-
         return ESP_OK;
-    }else if(req->method == HTTP_POST) {
+    }
+    else if(req->method == HTTP_POST)
+    {
         ESP_LOGI(TAG, "POST");
 
         char query[32];
@@ -166,6 +171,36 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 
         return ESP_OK;
     }
+    return ESP_OK;
+}
+
+static esp_err_t plot3d_get_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "Serve plot3D");
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, PLOT3D_HTML, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+extern const uint8_t plotly_js_gz_start[] asm("_binary_plotly_min_js_gz_start");
+extern const uint8_t plotly_js_gz_end[]   asm("_binary_plotly_min_js_gz_end");
+static esp_err_t plotly_js_get_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "Serve plotly.js");
+
+    httpd_resp_set_type(req, "application/javascript");
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    httpd_resp_send(req, (const char *)plotly_js_gz_start, plotly_js_gz_end - plotly_js_gz_start);
+
+    // size_t total = plotly_js_gz_end - plotly_js_gz_start;
+    // size_t offset = 0;
+    // while (offset < total) {
+    //     size_t chunk_size = MIN(1024, total - offset);
+    //     httpd_resp_send_chunk(req, (const char *)(plotly_js_gz_start + offset), chunk_size);
+    //     offset += chunk_size;
+    // }
+    // httpd_resp_send_chunk(req, NULL, 0); // end of response
+
     return ESP_OK;
 }
 
@@ -322,6 +357,18 @@ static const httpd_uri_t root = {
     .handler = root_get_handler
 };
 
+static const httpd_uri_t plot3d_uri = {
+    .uri = "/plot3d",
+    .method = HTTP_GET,
+    .handler = plot3d_get_handler
+};
+
+static const httpd_uri_t plotly_js_uri = {
+    .uri = "/plotly.min.js",
+    .method = HTTP_GET,
+    .handler = plotly_js_get_handler
+};
+
 static const httpd_uri_t ws_status_uri = {
     .uri = "/ws_status",
     .method = HTTP_GET,
@@ -371,6 +418,8 @@ static httpd_handle_t start_webserver(void)
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &root);
+        httpd_register_uri_handler(server, &plot3d_uri);
+        httpd_register_uri_handler(server, &plotly_js_uri);
         httpd_register_uri_handler(server, &ws_status_uri);
         httpd_register_uri_handler(server, &ws_log_uri);
         httpd_register_uri_handler(server, &redirect_uri);

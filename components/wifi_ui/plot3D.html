@@ -6,24 +6,66 @@ R"(
   <meta charset="utf-8">
   <!--<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>-->
   <script src="/plotly.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>3D Scatter Plot</title>
 </head>
 <body>
   <div id="plot" style="width:100%; height:100vh;"></div>
   <script>
-    var socket = new WebSocket("ws://" + location.host + "/ws");
-    let data = JSON.parse('{"x": [1,2,3], "y": [4,5,6], "z": [7,8,9], "c": ["red","blue","green"]}');
-    let trace = {
-      x: data.x,
-      y: data.y,
-      z: data.z,
-      mode: 'markers',
-      type: 'scatter3d',
-      marker: { size: 4, color: data.c }
-    };
-    Plotly.newPlot('plot', [trace], {
+    var socket = new WebSocket("ws://" + location.host + "/ws_plot3d");
+    let trace = { x: [0, 1], y: [0, 1], z: [0, 1], mode: 'markers', type: 'scatter3d', marker: { size: 4, color: ['red', 'red'] } };
+    var layout = {
+      scene: { 
+        xaxis: { range: [0.0, 1.0], autorange: false },
+        yaxis: { range: [0.0, 1.0], autorange: false },
+        zaxis: { range: [0.0, 1.0], autorange: false },
+        camera: { eye: { x:1, y:1, z:1 }}
+      },
       margin: {l:0,r:0,b:0,t:0}
+    };
+    Plotly.newPlot('plot', [trace], layout);
+    
+    let isDragging = false;
+    document.getElementById('plot').on('plotly_relayout', function(eventData) {
+      isDragging = false;
     });
+    document.getElementById('plot').on('plotly_relayouting', (eventdata) => {
+      isDragging = true;
+    });
+    socket.binaryType = 'arraybuffer';
+    socket.onmessage = function(event) {
+      var data = new DataView(event.data);
+
+      let xData = [];
+      let yData = [];
+      let zData = [];
+      let colorData = [];
+
+      // 100点のデータを解釈
+      for (let i = 0; i < 100; i++) {
+          let offset = i * 15;
+
+          // 座標 (x, y, z)
+          let x = data.getFloat32(offset, true);
+          let y = data.getFloat32(offset + 4, true);
+          let z = data.getFloat32(offset + 8, true);
+          
+          // 色 (r, g, b)
+          let r = data.getUint8(offset + 12);
+          let g = data.getUint8(offset + 13);
+          let b = data.getUint8(offset + 14);
+
+          // 座標と色のデータを配列に追加
+          xData.push(x);
+          yData.push(y);
+          zData.push(z);
+          colorData.push(`rgb(${r}, ${g}, ${b})`);
+      }
+
+      if (!isDragging) {
+        Plotly.update('plot', { x: [xData], y: [yData], z: [zData], marker: { size: 4, color: colorData }});
+      }
+    };
   </script>
 </body>
 </html>

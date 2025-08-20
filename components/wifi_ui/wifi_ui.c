@@ -191,16 +191,6 @@ static esp_err_t plotly_js_get_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "application/javascript");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
     httpd_resp_send(req, (const char *)plotly_js_gz_start, plotly_js_gz_end - plotly_js_gz_start);
-
-    // size_t total = plotly_js_gz_end - plotly_js_gz_start;
-    // size_t offset = 0;
-    // while (offset < total) {
-    //     size_t chunk_size = MIN(1024, total - offset);
-    //     httpd_resp_send_chunk(req, (const char *)(plotly_js_gz_start + offset), chunk_size);
-    //     offset += chunk_size;
-    // }
-    // httpd_resp_send_chunk(req, NULL, 0); // end of response
-
     return ESP_OK;
 }
 
@@ -334,6 +324,80 @@ static esp_err_t ws_log_handler(httpd_req_t *req) {
     }
     return ESP_OK;
 }
+void generate_random_data(uint8_t *buffer, size_t num_points) {
+    for (size_t i = 0; i < num_points; i++) {
+        // 座標 (x, y, z) をランダムに生成 (float型)
+        float x = (float)rand() / RAND_MAX;
+        float y = (float)rand() / RAND_MAX;
+        float z = (float)rand() / RAND_MAX;
+        
+        // 色 (r, g, b) をランダムに生成 (0-255の範囲)
+        uint8_t r = rand() % 256;
+        uint8_t g = rand() % 256;
+        uint8_t b = rand() % 256;
+        
+        // バイナリデータに座標と色を格納
+        size_t offset = i * 15;  // 1点あたり15バイト
+        
+        memcpy(&buffer[offset], &x, sizeof(float));        // x座標
+        memcpy(&buffer[offset + 4], &y, sizeof(float));    // y座標
+        memcpy(&buffer[offset + 8], &z, sizeof(float));    // z座標
+        buffer[offset + 12] = r;                           // 赤色
+        buffer[offset + 13] = g;                           // 緑色
+        buffer[offset + 14] = b;                           // 青色
+    }
+}
+static void websocket_plot3d_task(void *arg) {
+    int sockfd = (int)(intptr_t)arg;
+    static uint8_t data[1500];
+
+    while (1) {
+        // static const char * plots = "{\"x\": [0.1,0.2,0.3], \"y\": [0.4,0.5,0.6], \"z\": [0.7,0.8,0.9], \"c\": [\"red\",\"blue\",\"green\"]}";
+        // httpd_ws_frame_t ws_pkt = {
+        //     .type = HTTPD_WS_TYPE_TEXT,
+        //     .final = true,
+        //     .len = strlen(plots),
+        //     .payload = (uint8_t *)plots,
+        // };
+        // esp_err_t ret = httpd_ws_send_frame_async(server, sockfd, &ws_pkt);
+
+        generate_random_data(data, 100);
+        httpd_ws_frame_t ws_pkt = {
+            .type = HTTPD_WS_TYPE_BINARY,  // バイナリデータとして送信
+            .final = true,
+            .len = sizeof(data),
+            .payload = data,
+        };
+        esp_err_t ret = httpd_ws_send_frame_async(server, sockfd, &ws_pkt);
+
+        if (ret != ESP_OK) {
+            ESP_LOGI("WS_3D", "WebSocket disconnected, task exiting...");
+            break; // 切断検知 → タスク終了
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+
+    vTaskDelete(NULL);
+}
+static esp_err_t ws_plot3d_handler(httpd_req_t *req) {
+    if (req->method == HTTP_GET)
+    {
+        httpd_ws_frame_t ws_pkt;
+        memset(&ws_pkt, 0, sizeof(ws_pkt));
+        ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+
+        httpd_ws_recv_frame(req, &ws_pkt, 0); // header parse
+        int sockfd = httpd_req_to_sockfd(req);
+
+        ESP_LOGI(TAG, "Client connected (fd=%d), starting TX task", sockfd);
+        xTaskCreate(websocket_plot3d_task, "ws_3d", 4096, (void*)(intptr_t)sockfd, 5, NULL);
+
+        return ESP_OK;
+    }
+
+    return ESP_OK;
+}
 
 static esp_err_t redirect_handler(httpd_req_t *req) {
     ESP_LOGD(TAG, "Redirect else request: %s", req->uri);
@@ -385,6 +449,14 @@ static const httpd_uri_t ws_log_uri = {
     .is_websocket = true
 };
 
+static const httpd_uri_t ws_plot3d_uri = {
+    .uri = "/ws_plot3d",
+    .method = HTTP_GET,
+    .handler = ws_plot3d_handler,
+    .user_ctx = NULL,
+    .is_websocket = true
+};
+
 static const httpd_uri_t redirect_uri = {
     .uri = "/*",
     .method = HTTP_GET,
@@ -422,6 +494,7 @@ static httpd_handle_t start_webserver(void)
         httpd_register_uri_handler(server, &plotly_js_uri);
         httpd_register_uri_handler(server, &ws_status_uri);
         httpd_register_uri_handler(server, &ws_log_uri);
+        httpd_register_uri_handler(server, &ws_plot3d_uri);
         httpd_register_uri_handler(server, &redirect_uri);
         httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
     }

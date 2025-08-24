@@ -80,8 +80,10 @@ static void wifi_init_softap(void)
         // AP IP を 4.3.2.1 に設定
         esp_netif_ip_info_t ip_info;
         esp_netif_get_ip_info(netif, &ip_info);
-        IP4_ADDR(&ip_info.ip, 4, 3, 2, 1);
-        IP4_ADDR(&ip_info.gw, 4, 3, 2, 1);
+        // IP4_ADDR(&ip_info.ip, 4, 3, 2, 1);
+        // IP4_ADDR(&ip_info.gw, 4, 3, 2, 1);
+        IP4_ADDR(&ip_info.ip, 198, 18, 0, 1);
+        IP4_ADDR(&ip_info.gw, 198, 18, 0, 1);
         IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
         esp_netif_set_ip_info(netif, &ip_info);
 

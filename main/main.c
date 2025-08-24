@@ -37,8 +37,8 @@ static int my_log_vprintf(const char *fmt, va_list args)
     return ret;
 }
 
-#define LED_GPIO 2
-static bool led_status = false;
+#define LED_GPIO 19
+static bool led_status = true;
 void toggle_led(void* arg) {
     led_status = !led_status;
     gpio_set_level(LED_GPIO, led_status);

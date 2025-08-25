@@ -19,6 +19,7 @@
 #include "esp_netif.h"
 #include "lwip/inet.h"
 #include "lwip/netdb.h"
+#include "esp_spiffs.h"
 
 #include "dns_server.h"
 #include "wifi_ui.h"
@@ -184,15 +185,35 @@ static esp_err_t plot3d_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-extern const uint8_t plotly_js_gz_start[] asm("_binary_plotly_min_js_gz_start");
-extern const uint8_t plotly_js_gz_end[]   asm("_binary_plotly_min_js_gz_end");
 static esp_err_t plotly_js_get_handler(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "Serve plotly.js");
+    
+    FILE *fp = fopen("/spiffs/plotly.min.js.gz", "rb");
+    if (!fp) {
+        ESP_LOGE(TAG, "File open failed: /spiffs/plotly.min.js.gz");
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
 
     httpd_resp_set_type(req, "application/javascript");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-    httpd_resp_send(req, (const char *)plotly_js_gz_start, plotly_js_gz_end - plotly_js_gz_start);
+
+    // 1KBずつ送る（バッファは適宜調整）
+    char buf[1024];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+        esp_err_t r = httpd_resp_send_chunk(req, buf, n);
+        if (r != ESP_OK) {
+            ESP_LOGE(TAG, "send chunk failed: %s", esp_err_to_name(r));
+            fclose(fp);
+            return r;
+        }
+        //ESP_LOGI(TAG, "Sending plotly.min.js... Free heap: %lu, Min free heap: %lu", esp_get_free_heap_size(), esp_get_minimum_free_heap_size());
+    }
+    fclose(fp);
+    httpd_resp_send_chunk(req, NULL, 0);
+    
     return ESP_OK;
 }
 
@@ -551,6 +572,25 @@ bool send_log(const char *message, size_t len)
     return true;
 }
 
+static esp_err_t mount_spiffs(void)
+{
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = "/spiffs",
+        .partition_label = "storage", // partitions.csvのラベルに合わせる
+        .max_files = 5,
+        .format_if_mount_failed = false  // 既存イメージを消さない
+    };
+    esp_err_t err = esp_vfs_spiffs_register(&conf);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "SPIFFS mount failed: %s", esp_err_to_name(err));
+        return err;
+    }
+    size_t total = 0, used = 0;
+    esp_spiffs_info(conf.partition_label, &total, &used);
+    ESP_LOGI(TAG, "SPIFFS mounted. total=%u, used=%u", (unsigned int)total, (unsigned int)used);
+    return ESP_OK;
+}
+
 void wifiui_start(wifiui_config_t *config, void (*led_callback)(void*))
 {
     if(server != NULL){
@@ -561,6 +601,8 @@ void wifiui_start(wifiui_config_t *config, void (*led_callback)(void*))
     for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++){ ws_status_cilents[i].fd = -1; ws_status_cilents[i].ip_addr.addr = 0; }
     for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++){ ws_log_cilents[i].fd = -1; ws_log_cilents[i].ip_addr.addr = 0; }
     led_callback_func = led_callback;
+
+    mount_spiffs();
 
     /*
         Turn of warnings from HTTP server as redirecting traffic will yield

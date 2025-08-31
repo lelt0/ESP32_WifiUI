@@ -109,7 +109,7 @@ const char * html_head_template = R"(
 <title>%s</title>
 <meta name='viewport' content='width=device-width, initial-scale=1'>
 <style type='text/css'>
-* {white-space: pre-line;}
+p, div, span, li, td, th { white-space: pre-wrap; }
 body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; line-height: 1.6; max-width: 900px; margin-left: auto; margin-right: auto; } 
 h1, h2, h3 { line-height: 1.2; } 
 button { padding: 0.6em 1.2em; font-size: 1rem; border: none; border-radius: 0.5em; background: #0078ff; color: white; cursor: pointer; } button:hover { background: #005fcc; } 

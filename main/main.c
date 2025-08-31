@@ -114,7 +114,7 @@ void app_main(void)
     elements[ele_i++] = (const wifiui_element_t*) wifiui_element_static_text("This is static text.\nHello, World!");
     elements[ele_i++] = (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL);
     elements[ele_i++] = (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG"));
-    const wifiui_page_t* index_page = wifiui_create_page("index", (void**)elements, ele_i);
+    const wifiui_page_t* index_page = wifiui_create_page("ESP32 WifiUI index", (void**)elements, ele_i);
     char * html = wifiui_generate_page_html(index_page);
     printf("HTML: %s\n", html);
     free(html);

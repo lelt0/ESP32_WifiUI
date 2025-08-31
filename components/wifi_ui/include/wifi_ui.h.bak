@@ -6,6 +6,7 @@ extern "C" {
 
 #include <stdbool.h>
 #include <stddef.h>
+#include "../wifiui_page.h"
 
 typedef struct {
     void* arg;

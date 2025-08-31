@@ -11,6 +11,7 @@ typedef uint16_t wifiui_element_id;
 
 typedef enum {
     WIFIUI_STATIC_TEXT,
+    WIFIUI_HEADING,
     WIFIUI_BUTTON,
     WIFIUI_DYNAMIC_TEXT,
 } wifiui_element_type;

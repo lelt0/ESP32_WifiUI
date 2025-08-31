@@ -14,10 +14,11 @@ const wifiui_element_stext_t * wifiui_element_static_text(const char* text)
     return handler;
 }
 
-char* create_partial_html(const wifiui_element_t* self_)
+char* create_partial_html(const wifiui_element_t* self)
 {
-    char* buf = (char*)malloc(1024); // TODO
-    wifiui_element_stext_t* self = (wifiui_element_stext_t*)self_;
-    snprintf(buf, 1024, "<p>%s</p>", self->text);
+    wifiui_element_stext_t* self_stext = (wifiui_element_stext_t*)self;
+    size_t buf_size = strlen(self_stext->text) + 16; // TODO
+    char* buf = (char*)malloc(buf_size);
+    snprintf(buf, buf_size, "<p>%s</p>", self_stext->text);
     return buf;
 }

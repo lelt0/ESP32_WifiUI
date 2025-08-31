@@ -29,7 +29,7 @@ char* create_partial_html(const wifiui_element_t* self_)
         "<p id='%s'>%s</p>"
         "<script>"
             "ws_actions[%d]=function(data){"
-                "document.getElementById('%s').innerText = array2cstr(data);"
+                "document.getElementById('%s').innerText = cstr2str(data);"
                 "ws_send_with_eid(%d, str2cstr(document.getElementById('%s').innerText))"
             "}"
         "</script>", 

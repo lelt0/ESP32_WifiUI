@@ -9,6 +9,7 @@
 #include "esp_system.h"
 
 #include "wifiui_server.h"
+#include "wifiui_element_heading.h"
 #include "wifiui_element_stext.h"
 #include "wifiui_element_button.h"
 #include "wifiui_element_dtext.h"
@@ -107,11 +108,13 @@ void app_main(void)
 {
     s_orig_vprintf = esp_log_set_vprintf(my_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
 
-    const wifiui_element_t* elements[3];
-    elements[0] = (const wifiui_element_t*) wifiui_element_static_text("This is static text.\nHello, World!");
-    elements[1] = (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL);
-    elements[2] = (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG"));
-    const wifiui_page_t* index_page = wifiui_create_page("index", (void**)elements, 3);
+    const wifiui_element_t* elements[10];
+    int ele_i = 0;
+    elements[ele_i++] = (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1);
+    elements[ele_i++] = (const wifiui_element_t*) wifiui_element_static_text("This is static text.\nHello, World!");
+    elements[ele_i++] = (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL);
+    elements[ele_i++] = (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG"));
+    const wifiui_page_t* index_page = wifiui_create_page("index", (void**)elements, ele_i);
     char * html = wifiui_generate_page_html(index_page);
     printf("HTML: %s\n", html);
     free(html);

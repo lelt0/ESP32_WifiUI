@@ -131,7 +131,7 @@ ws.onmessage = function(evt) {
     let eid = data.getUint16(0, true);
     if (eid in ws_actions) { ws_actions[eid](new Uint8Array(event.data, 2)) }
 };
-function array2cstr(array) {
+function cstr2str(array) {
     const nulIndex = array.indexOf(0);
     const slice = nulIndex >= 0 ? array.subarray(0, nulIndex) : array;
     const text = new TextDecoder("utf-8").decode(slice);

@@ -25,7 +25,7 @@ struct wifiui_element {
         create_partial_html_f create_partial_html; // return pointer must be `free` by calling side.
         void (*on_post_from_this_element)(wifiui_element_t*, httpd_req_t*);
         bool use_websocket;
-        void (*on_recv_data)(wifiui_element_t*, const char* data, size_t len);
+        void (*on_recv_data)(wifiui_element_t* self, const uint8_t* data, size_t len);
     } system;
 };
 

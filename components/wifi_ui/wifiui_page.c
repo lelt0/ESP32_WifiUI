@@ -44,12 +44,25 @@ wifiui_page_t ** wifiui_get_pages(uint16_t* pages_count_dst)
 
 wifiui_element_t * wifiui_find_element(const wifiui_page_t * page, const wifiui_element_id id)
 {
-    if(page == NULL) return NULL;
-
-    for(int ele_i = 0; ele_i < page->element_count; ele_i++)
+    if(page == NULL)
     {
-        wifiui_element_t* element = (wifiui_element_t*)page->element_handlers[ele_i];
-        if(element->id == id) return element;
+        for(int page_i = 0; page_i < pages_count; page_i++)
+        {
+            wifiui_page_t* scan_page = pages[page_i];
+            for(int ele_i = 0; ele_i < scan_page->element_count; ele_i++)
+            {
+                wifiui_element_t* element = (wifiui_element_t*)scan_page->element_handlers[ele_i];
+                if(element->id == id) return element;
+            }
+        }
+    }
+    else
+    {
+        for(int ele_i = 0; ele_i < page->element_count; ele_i++)
+        {
+            wifiui_element_t* element = (wifiui_element_t*)page->element_handlers[ele_i];
+            if(element->id == id) return element;
+        }
     }
 
     return NULL;
@@ -123,6 +136,23 @@ function array2cstr(array) {
     const slice = nulIndex >= 0 ? array.subarray(0, nulIndex) : array;
     const text = new TextDecoder("utf-8").decode(slice);
     return text;
+}
+function str2cstr(str) {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(str);
+    const cstr = new Uint8Array(bytes.length + 1);
+    cstr.set(bytes, 0);
+    cstr[bytes.length] = 0; // NULL終端
+    return cstr;
+}
+function ws_send_with_eid(eid, array) {
+    const header = new Uint8Array(2);
+    header[0] = eid & 0xff;
+    header[1] = (eid >> 8) & 0xff;
+    const payload = new Uint8Array(header.length + array.length);
+    payload.set(header, 0);
+    payload.set(array, header.length);
+    ws.send(payload);
 }
 </script>
 )";

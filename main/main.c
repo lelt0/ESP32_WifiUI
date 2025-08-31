@@ -97,7 +97,7 @@ void status_send_task(void *arg) {
             snprintf(update_text, 64, "This is dynamic text.\nChanged!%d", count);
             dtext1->change_text(dtext1, update_text);
         }
-        printf("[yatadebug] %p %d\n", dtext1, count);
+        printf("[yatadebug] %d %s\n", count, dtext1->text);
 
         count++;
     }

@@ -315,8 +315,13 @@ esp_err_t websocket_handler(httpd_req_t *req)
             free(buf);
             return ret;
         }
-        ESP_LOGI(TAG, "[WebSocket] Packet type: %d", ws_pkt.type);
-        ESP_LOGI(TAG, "[WebSocket] Got packet with message: %s", ws_pkt.payload);
+        wifiui_element_id element_id = *((wifiui_element_id*)(ws_pkt.payload));
+        ESP_LOGI(TAG, "[WebSocket] data recved from eid:%u", element_id);
+        wifiui_element_t* sent_element = wifiui_find_element(NULL, element_id);
+        if(sent_element->system.on_recv_data != NULL)
+        {
+            sent_element->system.on_recv_data(sent_element, ws_pkt.payload + sizeof(wifiui_element_id), ws_pkt.len - sizeof(wifiui_element_id));
+        }
         free(buf);
     }
     return ESP_OK;

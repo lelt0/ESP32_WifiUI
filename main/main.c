@@ -108,8 +108,8 @@ void app_main(void)
     s_orig_vprintf = esp_log_set_vprintf(my_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
 
     const wifiui_element_t* elements[3];
-    elements[0] = (const wifiui_element_t*) wifiui_element_static_text("Hello, World!");
-    elements[1] = (const wifiui_element_t*) wifiui_element_button("CLICK", toggle_led, NULL);
+    elements[0] = (const wifiui_element_t*) wifiui_element_static_text("This is static text.\nHello, World!");
+    elements[1] = (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL);
     elements[2] = (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG"));
     const wifiui_page_t* index_page = wifiui_create_page("index", (void**)elements, 3);
     char * html = wifiui_generate_page_html(index_page);

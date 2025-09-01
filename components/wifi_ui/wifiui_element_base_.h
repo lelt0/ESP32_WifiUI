@@ -15,6 +15,7 @@ typedef enum {
     WIFIUI_BUTTON,
     WIFIUI_DYNAMIC_TEXT,
     WIFIUI_LINK,
+    WIFIUI_INPUT,
 } wifiui_element_type;
 
 typedef struct wifiui_element wifiui_element_t;

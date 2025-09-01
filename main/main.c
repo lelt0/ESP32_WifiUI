@@ -14,6 +14,7 @@
 #include "wifiui_element_button.h"
 #include "wifiui_element_dtext.h"
 #include "wifiui_element_link.h"
+#include "wifiui_element_input.h"
 
 static const char *TAG = "example";
 
@@ -105,18 +106,24 @@ void status_send_task(void *arg) {
     }
 }
 
+void input_callback(char* str, void* param)
+{
+    ESP_LOGI(TAG, "[yatadebug] INPUT: %s", str);
+}
+
 void app_main(void)
 {
     s_orig_vprintf = esp_log_set_vprintf(my_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
 
-    wifiui_page_t* second_page = wifiui_create_page("2nd page");
     wifiui_page_t* top_page = wifiui_create_page("WifiUI Sample");
+    wifiui_page_t* second_page = wifiui_create_page("2nd page");
 
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("This is static text.\nHello, World!"));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<b>This is static text.</b>\nHello, World!"));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG")));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto second page", second_page));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, true));
     
     wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
     

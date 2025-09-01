@@ -121,17 +121,22 @@ const char * html_head_template = R"(
 <!DOCTYPE html>
 <html>
 <head>
-<title>%s</title>
+<meta charset='utf-8'/>
 <meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>%s</title>
 <style type='text/css'>
 p, div, span, li, td, th { white-space: pre-wrap; }
 body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; line-height: 1.6; max-width: 900px; margin-left: auto; margin-right: auto; } 
 h1, h2, h3 { line-height: 1.2; } 
 button { padding: 0.6em 1.2em; font-size: 1rem; border: none; border-radius: 0.5em; background: #0078ff; color: white; cursor: pointer; } button:hover { background: #005fcc; } 
 img, video { max-width: 100%%; height: auto; display: block; margin: 1rem 0; } 
+textarea { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding-left: 0.5em; padding-right: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 6px; }
 @media (max-width: 600px) { body { padding: 0.8rem; font-size: 0.95rem; } button { width: 100%%; } } 
 @media (min-width: 601px) { body { font-size: 1.05rem; } }
 </style>
+<script>
+function fit_textarea_height(id){ t = document.getElementById(id); t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
+</script>
 </head>
 <body>
 )";

@@ -123,7 +123,7 @@ void app_main(void)
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_level(LED_GPIO, led_status);
 
-    wifiui_start();
+    wifiui_start(index_page);
 
     xTaskCreate(status_send_task, "status_send_task", 4096, NULL, 5, NULL);
 }

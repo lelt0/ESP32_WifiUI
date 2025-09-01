@@ -27,6 +27,7 @@ typedef struct {
 static websocket_client_t ws_cilents[EXAMPLE_MAX_STA_CONN];
 
 static httpd_handle_t server = NULL;
+static const char * top_page_uri = NULL;
 
 static void wifi_init_softap(void);
 static httpd_handle_t start_webserver(void);
@@ -41,7 +42,7 @@ static esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd);
 static esp_err_t mount_spiffs(void);
 static void websoket_close(int fd);
 
-void wifiui_start()
+void wifiui_start(const wifiui_page_t* top_page)
 {
     if(server != NULL){
         ESP_LOGW(TAG, "server already started");
@@ -49,6 +50,7 @@ void wifiui_start()
     }
 
     for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++){ ws_cilents[i].fd = -1; ws_cilents[i].ip_addr.addr = 0; }
+    top_page_uri = top_page->uri;
 
     mount_spiffs();
 
@@ -168,9 +170,9 @@ httpd_handle_t start_webserver(void)
                 if(page->has_websocket)
                 {
                     size_t uri_len = strlen(page->uri);
-                    char * uri_ws = (char*)malloc(uri_len + 2 + 1);
+                    char * uri_ws = (char*)malloc(uri_len + 3 + 1);
                     strncpy(uri_ws, page->uri, uri_len + 1);
-                    strcat(uri_ws, "ws");
+                    strcat(uri_ws, "/ws");
                     const httpd_uri_t websocket_uri = {
                         .uri = uri_ws,
                         .method = HTTP_GET,
@@ -356,7 +358,7 @@ esp_err_t redirect_handler(httpd_req_t *req)
     esp_netif_ip_info_t ip_info;
     esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_AP_DEF"), &ip_info);
     char redirect_url[64];
-    snprintf(redirect_url, sizeof(redirect_url), "http://" IPSTR "/", IP2STR(&ip_info.ip));
+    snprintf(redirect_url, sizeof(redirect_url), "http://" IPSTR "%s", IP2STR(&ip_info.ip), top_page_uri);
 
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_hdr(req, "Location", redirect_url);
@@ -369,11 +371,11 @@ esp_err_t redirect_handler(httpd_req_t *req)
 esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
 {
     httpd_resp_set_status(req, "302 Temporary Redirect");
-    httpd_resp_set_hdr(req, "Location", "/");
+    httpd_resp_set_hdr(req, "Location", top_page_uri);
     // iOS requires content in the response to detect a captive portal, simply redirecting is not sufficient.
-    httpd_resp_send(req, "Redirect to the captive portal", HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, "Redirect to the top page", HTTPD_RESP_USE_STRLEN);
 
-    ESP_LOGI(TAG, "Redirecting to root");
+    ESP_LOGI(TAG, "Redirecting to top page");
     return ESP_OK;
 }
 

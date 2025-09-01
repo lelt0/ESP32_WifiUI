@@ -22,7 +22,7 @@ char* create_partial_html(const wifiui_element_t* self_)
 {
     char* buf = (char*)malloc(1024); // TODO
     wifiui_element_button_t* self = (wifiui_element_button_t*)self_;
-    snprintf(buf, 1024, "<button onclick='fetch(location.origin + \"?eid=%s\", {method:\"POST\"})' id=\"%s\">%s</button>", 
+    snprintf(buf, 1024, "<button onclick='fetch(location.origin + location.pathname + \"?eid=%s\", {method:\"POST\"})' id=\"%s\">%s</button>", 
         self->common.id_str, self->common.id_str, self->label);
     return buf;
 }

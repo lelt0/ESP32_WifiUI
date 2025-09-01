@@ -20,11 +20,9 @@ const wifiui_page_t * wifiui_create_page(const char * title, void * elements[], 
     
     wifiui_page_t* page = (wifiui_page_t*)malloc(sizeof(wifiui_page_t));
     page->title = strdup(title);
-    if(pages_count == 0) {
-        page->uri = "/";
-    } else {
+    {
         char uri[16];
-        snprintf(uri, sizeof(uri), "/page%05u/", pages_count);
+        snprintf(uri, sizeof(uri), "/page%u", pages_count);
         page->uri = strdup(uri);
     }    
     page->element_handlers = elements_ptr;
@@ -123,7 +121,7 @@ img, video { max-width: 100%%; height: auto; display: block; margin: 1rem 0; }
 
 const char * html_websocket_template = R"(
 <script>
-let ws = new WebSocket('ws://' + location.host + '/ws');
+let ws = new WebSocket('ws://' + location.host + location.pathname + '/ws');
 let ws_actions = {};
 ws.binaryType = 'arraybuffer';
 ws.onmessage = function(evt) {

@@ -7,17 +7,8 @@ static wifiui_page_t ** pages = NULL;
 static uint16_t pages_count = 0;
 static void register_page(wifiui_page_t * page);
 
-const wifiui_page_t * wifiui_create_page(const char * title, void * elements[], size_t element_count)
+wifiui_page_t * wifiui_create_page(const char * title)
 {
-    bool websocket_required = false;
-    void* elements_ptr = (void*)malloc(sizeof(void*) * element_count);
-    for(int i = 0; i < element_count; i++) {
-        ((void**)elements_ptr)[i] = elements[i];
-
-        wifiui_element_t* element = (wifiui_element_t*)elements[i];
-        if(element->system.use_websocket || element->system.on_recv_data != NULL) websocket_required = true;
-    }
-    
     wifiui_page_t* page = (wifiui_page_t*)malloc(sizeof(wifiui_page_t));
     page->title = strdup(title);
     {
@@ -25,13 +16,39 @@ const wifiui_page_t * wifiui_create_page(const char * title, void * elements[], 
         snprintf(uri, sizeof(uri), "/page%u", pages_count);
         page->uri = strdup(uri);
     }    
-    page->element_handlers = elements_ptr;
-    page->element_count = element_count;
-    page->has_websocket = websocket_required;
+    page->elements = NULL;
+    page->element_count = 0;
+    page->has_websocket = false;
 
     register_page(page);
 
     return page;
+}
+
+size_t wifiui_add_element(wifiui_page_t* page, const wifiui_element_t* element)
+{
+    if(page == NULL) return 0;
+    if(element == NULL) return page->element_count;
+
+    if(page->elements == NULL) {
+        page->elements = (const wifiui_element_t**)malloc(sizeof(wifiui_element_t*));
+    } else {
+        page->elements = (const wifiui_element_t**)realloc(page->elements, sizeof(wifiui_element_t*) * (page->element_count + 1));
+    }
+    page->elements[page->element_count++] = element;
+
+    if(element->system.use_websocket || element->system.on_recv_data != NULL) page->has_websocket = true;
+
+    return page->element_count;
+}
+
+size_t wifiui_add_elements(wifiui_page_t* page, const wifiui_element_t* elements[], size_t element_count)
+{
+    for(size_t ele_i = 0; ele_i < element_count; ele_i++)
+    {
+        wifiui_add_element(page, elements[ele_i]);
+    }
+    return page->element_count;
 }
 
 wifiui_page_t ** wifiui_get_pages(uint16_t* pages_count_dst)
@@ -49,7 +66,7 @@ wifiui_element_t * wifiui_find_element(const wifiui_page_t * page, const wifiui_
             wifiui_page_t* scan_page = pages[page_i];
             for(int ele_i = 0; ele_i < scan_page->element_count; ele_i++)
             {
-                wifiui_element_t* element = (wifiui_element_t*)scan_page->element_handlers[ele_i];
+                wifiui_element_t* element = (wifiui_element_t*)scan_page->elements[ele_i];
                 if(element->id == id) return element;
             }
         }
@@ -58,7 +75,7 @@ wifiui_element_t * wifiui_find_element(const wifiui_page_t * page, const wifiui_
     {
         for(int ele_i = 0; ele_i < page->element_count; ele_i++)
         {
-            wifiui_element_t* element = (wifiui_element_t*)page->element_handlers[ele_i];
+            wifiui_element_t* element = (wifiui_element_t*)page->elements[ele_i];
             if(element->id == id) return element;
         }
     }
@@ -86,7 +103,7 @@ char* wifiui_generate_page_html(const wifiui_page_t* page)
         off += snprintf(html + off, html_max - off, "%s", html_websocket_template);
     }
     for(int i = 0; i < page->element_count; i++) {
-        wifiui_element_t* element = (wifiui_element_t*)page->element_handlers[i];
+        wifiui_element_t* element = (wifiui_element_t*)page->elements[i];
         if(element->system.create_partial_html != NULL) {
             char* partial_html = element->system.create_partial_html(element);
             off += snprintf(html + off, html_max - off, "%s", partial_html);

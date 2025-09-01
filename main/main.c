@@ -108,14 +108,12 @@ void app_main(void)
 {
     s_orig_vprintf = esp_log_set_vprintf(my_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
 
-    const wifiui_element_t* elements[10];
-    int ele_i = 0;
-    elements[ele_i++] = (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1);
-    elements[ele_i++] = (const wifiui_element_t*) wifiui_element_static_text("This is static text.\nHello, World!");
-    elements[ele_i++] = (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL);
-    elements[ele_i++] = (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG"));
-    const wifiui_page_t* index_page = wifiui_create_page("ESP32 WifiUI index", (void**)elements, ele_i);
-    char * html = wifiui_generate_page_html(index_page);
+    wifiui_page_t* top_page = wifiui_create_page("WifiUI Sample");
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("This is static text.\nHello, World!"));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG")));
+    char * html = wifiui_generate_page_html(top_page);
     printf("HTML: %s\n", html);
     free(html);
 
@@ -123,7 +121,7 @@ void app_main(void)
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_level(LED_GPIO, led_status);
 
-    wifiui_start(index_page);
+    wifiui_start(top_page);
 
     xTaskCreate(status_send_task, "status_send_task", 4096, NULL, 5, NULL);
 }

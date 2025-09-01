@@ -26,16 +26,20 @@ char* create_partial_html(const wifiui_element_t* self)
     size_t buf_size = strlen(self_input->button_label) + 1024; // TODO
     char* buf = (char*)malloc(buf_size);
     snprintf(buf, buf_size, 
-        "<textarea id='%s' rows='1' placeholder='...'></textarea>"
-        "<button onclick='eid=\"%s\"; t = document.getElementById(eid); ws_send_with_eid(%u, str2cstr(t.value)); %s'>%s</button>"
+        "<textarea id='%s' rows='1' placeholder='send to Ctrl+Enter'></textarea>"
+        "<button id='%s_btn' onclick='eid=\"%s\"; t = document.getElementById(eid); ws_send_with_eid(%u, str2cstr(t.value)); %s'>%s</button>"
         "<script>"
+        "document.getElementById('%s').addEventListener('keydown', function(e){ if(e.key==='Enter'&& e.ctrlKey){e.preventDefault();document.getElementById('%s_btn').click();} });"
         "document.getElementById('%s').addEventListener('input', function(){ fit_textarea_height('%s'); });"
         "window.addEventListener('load', function(){ fit_textarea_height('%s'); });"
         "window.addEventListener('resize', function(){ fit_textarea_height('%s'); });"
         "</script>",
         self_input->common.id_str, 
-        self_input->common.id_str, self_input->common.id, (self_input->clear_after_sent?"t.value = \"\"; fit_textarea_height(eid);":""), self_input->button_label,
-        self_input->common.id_str, self_input->common.id_str, self_input->common.id_str , self_input->common.id_str
+        self_input->common.id_str, self_input->common.id_str, self_input->common.id, (self_input->clear_after_sent?"t.value = \"\"; fit_textarea_height(eid);":""), self_input->button_label,
+        self_input->common.id_str, self_input->common.id_str, 
+        self_input->common.id_str, self_input->common.id_str, 
+        self_input->common.id_str , 
+        self_input->common.id_str
     );
     return buf;
 }

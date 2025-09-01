@@ -13,6 +13,7 @@
 #include "wifiui_element_stext.h"
 #include "wifiui_element_button.h"
 #include "wifiui_element_dtext.h"
+#include "wifiui_element_link.h"
 
 static const char *TAG = "example";
 
@@ -108,14 +109,21 @@ void app_main(void)
 {
     s_orig_vprintf = esp_log_set_vprintf(my_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
 
+    wifiui_page_t* second_page = wifiui_create_page("2nd page");
     wifiui_page_t* top_page = wifiui_create_page("WifiUI Sample");
+
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("This is static text.\nHello, World!"));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG")));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto second page", second_page));
+    
+    wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
+    
     char * html = wifiui_generate_page_html(top_page);
     printf("HTML: %s\n", html);
     free(html);
+
 
     gpio_reset_pin(LED_GPIO);
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);

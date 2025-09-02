@@ -9,6 +9,9 @@ extern "C" {
 void wifiui_start(const wifiui_page_t* top_page);
 
 void wifiui_ws_send_data_async(const char* data, size_t len);
+esp_err_t wifiui_connect_to_ap(const char* ssid, const char* password);
+
+void wifiui_print_server_status();
 
 #ifdef __cplusplus
 }

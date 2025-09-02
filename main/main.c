@@ -102,6 +102,8 @@ void status_send_task(void *arg) {
         }
         printf("[yatadebug] %d %s\n", count, dtext1->text);
 
+        wifiui_print_server_status();
+
         count++;
     }
 }
@@ -139,4 +141,7 @@ void app_main(void)
     wifiui_start(top_page);
 
     xTaskCreate(status_send_task, "status_send_task", 4096, NULL, 5, NULL);
+
+    esp_err_t ret = wifiui_connect_to_ap("aterm-f974f0-g", "8d3653bb5ac6a");
+    ESP_LOGI(TAG, "internet connection: %d", ret);
 }

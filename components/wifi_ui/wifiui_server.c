@@ -41,6 +41,8 @@ static void create_ssid(char * dst, unsigned int dst_len);
 static esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd);
 static esp_err_t mount_spiffs(void);
 static void websoket_close(int fd);
+static esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst);
+static esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst);
 
 void wifiui_start(const wifiui_page_t* top_page)
 {
@@ -133,7 +135,7 @@ void wifi_init_softap(void)
     ESP_ERROR_CHECK(esp_wifi_start());
 
     esp_netif_ip_info_t ip_info_;
-    esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_AP_DEF"), &ip_info_);
+    get_current_ap_ip(&ip_info_);
     ESP_LOGI(TAG, "Set up softAP with IP: " IPSTR, IP2STR(&ip_info_.ip));
     ESP_LOGI(TAG, "wifi_init_softap finished. SSID:'%s' password:'%s'",
              wifi_config.ap.ssid, EXAMPLE_ESP_WIFI_PASS);
@@ -186,7 +188,7 @@ httpd_handle_t start_webserver(void)
             }
         }
         const httpd_uri_t redirect_uri = {
-            .uri = "/*",
+            .uri = "*",
             .method = HTTP_GET,
             .handler = redirect_handler,
             .user_ctx = NULL
@@ -195,6 +197,23 @@ httpd_handle_t start_webserver(void)
         httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
     }
     return server;
+}
+
+esp_err_t wifiui_connect_to_ap(const char* ssid, const char* password)
+{
+    wifi_config_t sta_config = {
+        .sta = {
+            // .ssid = ssid,
+            // .password = password,
+            .threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK,
+        },
+    };
+    strncpy((char*)sta_config.sta.ssid, ssid, sizeof(sta_config.sta.ssid));
+    strncpy((char*)sta_config.sta.password, password, sizeof(sta_config.sta.password));
+    esp_err_t ret;
+    ESP_ERROR_CHECK(ret = esp_wifi_set_config(WIFI_IF_STA, &sta_config));
+    ESP_ERROR_CHECK(ret= esp_wifi_connect());
+    return ret;
 }
 
 esp_err_t page_access_handler(httpd_req_t *req)
@@ -353,10 +372,10 @@ void wifiui_ws_send_data_async(const char* data, size_t len)
 
 esp_err_t redirect_handler(httpd_req_t *req)
 {
-    ESP_LOGD(TAG, "Redirect else request: %s", req->uri);
+    ESP_LOGI(TAG, "Redirect else request: %s", req->uri);
     
     esp_netif_ip_info_t ip_info;
-    esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_AP_DEF"), &ip_info);
+    get_current_ap_ip(&ip_info);
     char redirect_url[64];
     snprintf(redirect_url, sizeof(redirect_url), "http://" IPSTR "%s", IP2STR(&ip_info.ip), top_page_uri);
 
@@ -441,4 +460,41 @@ void websoket_close(int fd)
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[WebSocket] Failed to send close frame: %s", esp_err_to_name(ret));
     }
+}
+
+void wifiui_print_server_status()
+{
+    if(server == NULL) {
+        ESP_LOGI(TAG, "HTTP server: not started");
+    } else {
+        esp_netif_ip_info_t ap_ip = {0};
+        get_current_ap_ip(&ap_ip);
+        ESP_LOGI(TAG, "HTTP server: " IPSTR, IP2STR(&ap_ip.ip));
+    }
+    char buf[64];
+    int buff_off = 0;
+    for(int cli_i = 0; cli_i < EXAMPLE_MAX_STA_CONN; cli_i++)
+    {
+        buff_off += snprintf(buf + buff_off, sizeof(buf) - buff_off, IPSTR "(%d), ", IP2STR(&ws_cilents[cli_i].ip_addr), ws_cilents[cli_i].fd);    
+    }
+    ESP_LOGI(TAG, "websocket clients: %s", buf);
+
+    esp_netif_ip_info_t sta_ip = {0};
+    get_current_sta_ip(&sta_ip);
+    ESP_LOGI(TAG, "sta:: ip: " IPSTR, IP2STR(&sta_ip.ip));
+}
+
+
+esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst)
+{
+    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if(!sta_netif) return ESP_FAIL;
+    return esp_netif_get_ip_info(sta_netif, dst);
+}
+
+esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst)
+{
+    esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    if(!ap_netif) return ESP_FAIL;
+    return esp_netif_get_ip_info(ap_netif, dst);
 }

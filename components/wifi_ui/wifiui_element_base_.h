@@ -16,6 +16,7 @@ typedef enum {
     WIFIUI_DYNAMIC_TEXT,
     WIFIUI_LINK,
     WIFIUI_INPUT,
+    WIFIUI_AP_CONNECT_FORM,
 } wifiui_element_type;
 
 typedef struct wifiui_element wifiui_element_t;
@@ -32,7 +33,6 @@ struct wifiui_element {
     } system;
 };
 
-wifiui_element_id new_id();
 void set_default_common(wifiui_element_t* dst, wifiui_element_type type, create_partial_html_f create_html_func);
 void wifiui_element_send_data(const wifiui_element_t* dst, const char* data, size_t len);
 

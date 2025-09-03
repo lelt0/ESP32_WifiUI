@@ -43,6 +43,8 @@ static esp_err_t mount_spiffs(void);
 static void websoket_close(int fd);
 static esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst);
 static esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst);
+static void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                               int32_t event_id, void* event_data);
 
 void wifiui_start(const wifiui_page_t* top_page)
 {
@@ -71,6 +73,11 @@ void wifiui_start(const wifiui_page_t* top_page)
     ESP_ERROR_CHECK(esp_netif_init());
     // Create default event loop needed by the  main app
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+    // ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
+    //                                                 WIFI_EVENT_SCAN_DONE,
+    //                                                 &wifi_event_handler,
+    //                                                 NULL,
+    //                                                 NULL));
 
     // Initialize Wi-Fi including netif with default config
     esp_netif_create_default_wifi_sta();
@@ -497,4 +504,69 @@ esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst)
     esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
     if(!ap_netif) return ESP_FAIL;
     return esp_netif_get_ip_info(ap_netif, dst);
+}
+
+void wifiui_scan_available_ssid()
+{
+    wifi_scan_config_t scan_config = {
+        .ssid = 0,
+        .bssid = 0,
+        .channel = 0,
+        .show_hidden = true,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE
+    };
+    esp_err_t ret = esp_wifi_scan_start(&scan_config, false);
+    printf("[yatadebug] esp_wifi_scan_start()->%d\n", ret);
+}
+
+void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                               int32_t event_id, void* event_data)
+{
+    printf("[yatadebug] wifi_event_handler called\n");
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_SCAN_DONE) {
+
+        wifi_event_sta_scan_done_t *scan_done = (wifi_event_sta_scan_done_t *)event_data;
+        printf("[yatadebug] scan_done:%d\n", scan_done->number);
+
+        uint16_t number = 0;
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        esp_wifi_scan_get_ap_num(&number);  // 見つかったAP数を取得
+        wifi_ap_record_t *ap_info = malloc(sizeof(wifi_ap_record_t) * number);
+        if (ap_info == NULL) {
+            ESP_LOGE("SCAN", "malloc failed, %u", number);
+            return;
+        }
+        ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
+
+        for (int i = 0; i < number; i++) {
+            ESP_LOGI("SCAN", "SSID: %s, RSSI: %d, Auth: %d",
+                     ap_info[i].ssid,
+                     ap_info[i].rssi,
+                     ap_info[i].authmode);
+        }
+
+        free(ap_info);
+    }
+}
+
+void wifiui_scan_available_ssid_results()
+{
+    // uint16_t number = 10;
+    // uint16_t ap_count = 0;
+    // wifi_ap_record_t ap_info[10];
+
+    // //esp_wifi_scan_start(NULL, true);
+
+    // esp_err_t ret;
+    // ESP_LOGI(TAG, "Max AP number ap_info can hold = %u", number);
+    // ESP_ERROR_CHECK(ret = esp_wifi_scan_get_ap_num(&ap_count));
+    // printf("[yatadebug] esp_wifi_scan_get_ap_num()->%d\n", ret);
+    // ESP_ERROR_CHECK(ret = esp_wifi_scan_get_ap_records(&number, ap_info));
+    // printf("[yatadebug] esp_wifi_scan_get_ap_records()->%d\n", ret);
+    // ESP_LOGI(TAG, "Total APs scanned = %u, actual AP number ap_info holds = %u", ap_count, number);
+    // for (int i = 0; i < number; i++) {
+    //     ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
+    //     ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
+    //     ESP_LOGI(TAG, "Channel \t\t%d", ap_info[i].primary);
+    // }
 }

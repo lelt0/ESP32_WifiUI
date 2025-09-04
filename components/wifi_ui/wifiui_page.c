@@ -130,8 +130,8 @@ h1, h2, h3 { line-height: 1.2; }
 button { padding: 0.6em 1.2em; font-size: 1rem; border: none; border-radius: 0.5em; background: #0078ff; color: white; cursor: pointer; } button:hover { background: #005fcc; } 
 img, video { max-width: 100%%; height: auto; display: block; margin: 1rem 0; } 
 .wrap_text { white-space: pre-wrap; }
-.multi_input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 6px; }
-.single_input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 6px; }
+.multi_input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 0.5em; margin-bottom: -0.4em; }
+.single_input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 0.5em; }
 .combo_input { width: 100%%; padding: 8px; box-sizing: border-box; }
 .combo_list { top: 100%%; left: 0; right: 0; border: 1px solid #ccc; border-top: none; overflow-y: auto; display: none; z-index: 1000; }
 .combo_item { padding: 6px 8px; cursor: pointer; }

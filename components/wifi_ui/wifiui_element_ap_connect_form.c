@@ -36,11 +36,13 @@ char* create_partial_html(const wifiui_element_t* self)
     size_t buf_size = 2048; // TODO
     char* buf = (char*)malloc(buf_size);
     snprintf(buf, buf_size, 
+        "<p>"
         "<button id='%s_scan'>Scan available SSID</button><br>"
         "<input class='single_input combo_input' id='%s_ssid' type='text' placeholder='SSID' autocomplete='off'/>"
-            "<div class='combo_list' id='%s_ssid_list'></div>"
+            "<span class='combo_list' id='%s_ssid_list'></span>"
         "<input class='single_input' id='%s_password' type='password' placeholder='password' autocomplete='off'/>"
         "<button id='%s_connect'>Connect</button>"
+        "</p>"
         "<script>"
         "{"
             "const scan_button = document.getElementById('%s_scan');"

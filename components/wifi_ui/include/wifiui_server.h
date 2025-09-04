@@ -10,9 +10,10 @@ void wifiui_start(const wifiui_page_t* top_page);
 
 void wifiui_ws_send_data_async(const char* data, size_t len);
 esp_err_t wifiui_connect_to_ap(const char* ssid, const char* password);
-void wifiui_scan_available_ssid();
-void wifiui_scan_available_ssid_results();
 void wifiui_print_server_status();
+
+void wifiui_start_ssid_scan();
+void wifiui_set_ssid_scan_callback(void (*callback)(void*), void* arg);
 
 #ifdef __cplusplus
 }

@@ -15,8 +15,8 @@
 #include "dns_server.h"
 #include "wifiui_page.h"
 
-#define EXAMPLE_ESP_WIFI_PASS ""
-#define EXAMPLE_MAX_STA_CONN 2
+#define ESP_AP_PASS ""
+#define MAX_AP_CONN 2
 
 static const char * TAG = "wifiui_server";
 
@@ -24,14 +24,17 @@ typedef struct {
     int fd;
     esp_ip4_addr_t ip_addr;
 } websocket_client_t;
-static websocket_client_t ws_cilents[EXAMPLE_MAX_STA_CONN];
+static websocket_client_t ws_cilents[MAX_AP_CONN];
 
 static httpd_handle_t server = NULL;
 static const char * top_page_uri = NULL;
+static void (*on_scan_completed_callback)(void*) = NULL;
+static void * on_scan_completed_callback_arg = NULL;
 
 static void wifi_init_softap(void);
 static httpd_handle_t start_webserver(void);
 
+static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 static esp_err_t page_access_handler(httpd_req_t *req);
 static esp_err_t websocket_handler(httpd_req_t *req);
 static esp_err_t redirect_handler(httpd_req_t *req);
@@ -43,8 +46,6 @@ static esp_err_t mount_spiffs(void);
 static void websoket_close(int fd);
 static esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst);
 static esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst);
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                               int32_t event_id, void* event_data);
 
 void wifiui_start(const wifiui_page_t* top_page)
 {
@@ -53,7 +54,7 @@ void wifiui_start(const wifiui_page_t* top_page)
         return;
     }
 
-    for(int i = 0; i < EXAMPLE_MAX_STA_CONN; i++){ ws_cilents[i].fd = -1; ws_cilents[i].ip_addr.addr = 0; }
+    for(int i = 0; i < MAX_AP_CONN; i++){ ws_cilents[i].fd = -1; ws_cilents[i].ip_addr.addr = 0; }
     top_page_uri = top_page->uri;
 
     mount_spiffs();
@@ -73,11 +74,8 @@ void wifiui_start(const wifiui_page_t* top_page)
     ESP_ERROR_CHECK(esp_netif_init());
     // Create default event loop needed by the  main app
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    // ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
-    //                                                 WIFI_EVENT_SCAN_DONE,
-    //                                                 &wifi_event_handler,
-    //                                                 NULL,
-    //                                                 NULL));
+    esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &wifi_event_handler, NULL, NULL);
+
 
     // Initialize Wi-Fi including netif with default config
     esp_netif_create_default_wifi_sta();
@@ -99,8 +97,6 @@ void wifi_init_softap(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-
-    //ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
     
     esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
     esp_netif_dhcps_stop(netif);
@@ -126,15 +122,15 @@ void wifi_init_softap(void)
     wifi_config_t wifi_config = {
         .ap = {
             //.ssid = ap_ssid,
-            .password = EXAMPLE_ESP_WIFI_PASS,
+            .password = ESP_AP_PASS,
             //.ssid_len = strlen(ap_ssid),
             .authmode = WIFI_AUTH_WPA_WPA2_PSK,
-            .max_connection = EXAMPLE_MAX_STA_CONN
+            .max_connection = MAX_AP_CONN
         },
     };
     create_ssid((char*)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid));
     wifi_config.ap.ssid_len = strlen((char*)wifi_config.ap.ssid);
-    if (strlen(EXAMPLE_ESP_WIFI_PASS) == 0) {
+    if (strlen(ESP_AP_PASS) == 0) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
@@ -145,7 +141,7 @@ void wifi_init_softap(void)
     get_current_ap_ip(&ip_info_);
     ESP_LOGI(TAG, "Set up softAP with IP: " IPSTR, IP2STR(&ip_info_.ip));
     ESP_LOGI(TAG, "wifi_init_softap finished. SSID:'%s' password:'%s'",
-             wifi_config.ap.ssid, EXAMPLE_ESP_WIFI_PASS);
+             wifi_config.ap.ssid, ESP_AP_PASS);
 }
 
 httpd_handle_t start_webserver(void)
@@ -223,6 +219,16 @@ esp_err_t wifiui_connect_to_ap(const char* ssid, const char* password)
     return ret;
 }
 
+void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
+{
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_SCAN_DONE)
+    {
+        if(on_scan_completed_callback != NULL) {
+            on_scan_completed_callback(on_scan_completed_callback_arg);
+        }
+    }
+}
+
 esp_err_t page_access_handler(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "ACCESS: %s %s", req->uri, http_method_str(req->method));
@@ -291,7 +297,7 @@ esp_err_t websocket_handler(httpd_req_t *req)
         // WebSocket connection establish
         esp_ip4_addr_t connected_ip_addr = get_client_ip_addr(req, sock_fd);
         bool override = false;
-        for(int exist_cli_i = 0; exist_cli_i < EXAMPLE_MAX_STA_CONN; exist_cli_i++) {
+        for(int exist_cli_i = 0; exist_cli_i < MAX_AP_CONN; exist_cli_i++) {
             if (ws_cilents[exist_cli_i].ip_addr.addr == connected_ip_addr.addr) {
                 websoket_close(ws_cilents[exist_cli_i].fd);
                 ws_cilents[exist_cli_i].fd = sock_fd;
@@ -302,15 +308,15 @@ esp_err_t websocket_handler(httpd_req_t *req)
         }
         if(!override) {
             int exist_cli_i;
-            for(exist_cli_i = 0; exist_cli_i < EXAMPLE_MAX_STA_CONN; exist_cli_i++) {
+            for(exist_cli_i = 0; exist_cli_i < MAX_AP_CONN; exist_cli_i++) {
                 if (ws_cilents[exist_cli_i].fd < 0) {
                     ws_cilents[exist_cli_i].fd = sock_fd;
                     ws_cilents[exist_cli_i].ip_addr = connected_ip_addr;
                     break;
                 }
             }
-            if(exist_cli_i == EXAMPLE_MAX_STA_CONN) {
-                ESP_LOGW(TAG, "[WebSocket] Max WebSocket clients reached (fd: %d)", EXAMPLE_MAX_STA_CONN);
+            if(exist_cli_i == MAX_AP_CONN) {
+                ESP_LOGW(TAG, "[WebSocket] Max WebSocket clients reached (fd: %d)", MAX_AP_CONN);
             }
         }
         ESP_LOGI(TAG, "[WebSocket] WebSocket connection established from " IPSTR " (%d)", IP2STR(&connected_ip_addr), sock_fd);
@@ -363,7 +369,7 @@ void wifiui_ws_send_data_async(const char* data, size_t len)
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.payload = (uint8_t *)data;
     ws_pkt.len = len;
-    for(int cli_i = 0; cli_i < EXAMPLE_MAX_STA_CONN; cli_i++)
+    for(int cli_i = 0; cli_i < MAX_AP_CONN; cli_i++)
     {
         if(ws_cilents[cli_i].fd >= 0)
         {
@@ -381,8 +387,6 @@ esp_err_t redirect_handler(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "Redirect else request: %s", req->uri);
     
-    esp_netif_ip_info_t ip_info;
-    get_current_ap_ip(&ip_info);
     char redirect_url[64];
     snprintf(redirect_url, sizeof(redirect_url), "%s", top_page_uri);
 
@@ -469,28 +473,22 @@ void websoket_close(int fd)
     }
 }
 
-void wifiui_print_server_status()
+void wifiui_start_ssid_scan()
 {
-    if(server == NULL) {
-        ESP_LOGI(TAG, "HTTP server: not started");
-    } else {
-        esp_netif_ip_info_t ap_ip = {0};
-        get_current_ap_ip(&ap_ip);
-        ESP_LOGI(TAG, "HTTP server: " IPSTR, IP2STR(&ap_ip.ip));
-    }
-    char buf[64];
-    int buff_off = 0;
-    for(int cli_i = 0; cli_i < EXAMPLE_MAX_STA_CONN; cli_i++)
-    {
-        buff_off += snprintf(buf + buff_off, sizeof(buf) - buff_off, IPSTR "(%d), ", IP2STR(&ws_cilents[cli_i].ip_addr), ws_cilents[cli_i].fd);    
-    }
-    ESP_LOGI(TAG, "websocket clients: %s", buf);
-
-    esp_netif_ip_info_t sta_ip = {0};
-    get_current_sta_ip(&sta_ip);
-    ESP_LOGI(TAG, "sta:: ip: " IPSTR, IP2STR(&sta_ip.ip));
+    wifi_scan_config_t scan_config = {
+        .ssid = 0,
+        .bssid = 0,
+        .channel = 0,
+        .show_hidden = true,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE
+    };
+    esp_err_t ret = esp_wifi_scan_start(&scan_config, false);
 }
-
+void wifiui_set_ssid_scan_callback(void (*callback)(void*), void* arg)
+{
+    on_scan_completed_callback = callback;
+    on_scan_completed_callback_arg = arg;
+}
 
 esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst)
 {
@@ -506,67 +504,24 @@ esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst)
     return esp_netif_get_ip_info(ap_netif, dst);
 }
 
-void wifiui_scan_available_ssid()
+void wifiui_print_server_status()
 {
-    wifi_scan_config_t scan_config = {
-        .ssid = 0,
-        .bssid = 0,
-        .channel = 0,
-        .show_hidden = true,
-        .scan_type = WIFI_SCAN_TYPE_ACTIVE
-    };
-    esp_err_t ret = esp_wifi_scan_start(&scan_config, false);
-    printf("[yatadebug] esp_wifi_scan_start()->%d\n", ret);
-}
-
-void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                               int32_t event_id, void* event_data)
-{
-    printf("[yatadebug] wifi_event_handler called\n");
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_SCAN_DONE) {
-
-        wifi_event_sta_scan_done_t *scan_done = (wifi_event_sta_scan_done_t *)event_data;
-        printf("[yatadebug] scan_done:%d\n", scan_done->number);
-
-        uint16_t number = 0;
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        esp_wifi_scan_get_ap_num(&number);  // 見つかったAP数を取得
-        wifi_ap_record_t *ap_info = malloc(sizeof(wifi_ap_record_t) * number);
-        if (ap_info == NULL) {
-            ESP_LOGE("SCAN", "malloc failed, %u", number);
-            return;
-        }
-        ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
-
-        for (int i = 0; i < number; i++) {
-            ESP_LOGI("SCAN", "SSID: %s, RSSI: %d, Auth: %d",
-                     ap_info[i].ssid,
-                     ap_info[i].rssi,
-                     ap_info[i].authmode);
-        }
-
-        free(ap_info);
+    if(server == NULL) {
+        ESP_LOGI(TAG, "HTTP server: not started");
+    } else {
+        esp_netif_ip_info_t ap_ip = {0};
+        get_current_ap_ip(&ap_ip);
+        ESP_LOGI(TAG, "HTTP server: " IPSTR, IP2STR(&ap_ip.ip));
     }
-}
+    char buf[64];
+    int buff_off = 0;
+    for(int cli_i = 0; cli_i < MAX_AP_CONN; cli_i++)
+    {
+        buff_off += snprintf(buf + buff_off, sizeof(buf) - buff_off, IPSTR "(%d), ", IP2STR(&ws_cilents[cli_i].ip_addr), ws_cilents[cli_i].fd);    
+    }
+    ESP_LOGI(TAG, "websocket clients: %s", buf);
 
-void wifiui_scan_available_ssid_results()
-{
-    // uint16_t number = 10;
-    // uint16_t ap_count = 0;
-    // wifi_ap_record_t ap_info[10];
-
-    // //esp_wifi_scan_start(NULL, true);
-
-    // esp_err_t ret;
-    // ESP_LOGI(TAG, "Max AP number ap_info can hold = %u", number);
-    // ESP_ERROR_CHECK(ret = esp_wifi_scan_get_ap_num(&ap_count));
-    // printf("[yatadebug] esp_wifi_scan_get_ap_num()->%d\n", ret);
-    // ESP_ERROR_CHECK(ret = esp_wifi_scan_get_ap_records(&number, ap_info));
-    // printf("[yatadebug] esp_wifi_scan_get_ap_records()->%d\n", ret);
-    // ESP_LOGI(TAG, "Total APs scanned = %u, actual AP number ap_info holds = %u", ap_count, number);
-    // for (int i = 0; i < number; i++) {
-    //     ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
-    //     ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
-    //     ESP_LOGI(TAG, "Channel \t\t%d", ap_info[i].primary);
-    // }
+    esp_netif_ip_info_t sta_ip = {0};
+    get_current_sta_ip(&sta_ip);
+    ESP_LOGI(TAG, "sta:: ip: " IPSTR, IP2STR(&sta_ip.ip));
 }

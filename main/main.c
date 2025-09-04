@@ -116,6 +116,14 @@ void input_callback(char* str, void* param)
     ESP_LOGI(TAG, "[yatadebug] INPUT: %s", str);
 }
 
+const wifiui_element_dtext_t* dtext2 = NULL;
+void internet_connected(uint32_t ip_addr)
+{
+    char ip_str[40];
+    snprintf(ip_str, sizeof(ip_str), "current IP as STA: " IPSTR, IP2STR((esp_ip4_addr_t*)&ip_addr));
+    if(dtext2 != NULL) dtext2->change_text(dtext2, ip_str);
+}
+
 void app_main(void)
 {
     s_orig_vprintf = esp_log_set_vprintf(my_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
@@ -129,7 +137,8 @@ void app_main(void)
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG")));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto second page", second_page));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, true));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(NULL));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(internet_connected));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (dtext2 = wifiui_element_dynamic_text("current IP as STA: --")));
     
     wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
     
@@ -144,7 +153,4 @@ void app_main(void)
     wifiui_start(top_page);
 
     xTaskCreate(status_send_task, "status_send_task", 4096, NULL, 5, NULL);
-    
-    esp_err_t ret = wifiui_connect_to_ap("aterm-f974f0-g", "8d3653bb5ac6a");
-    ESP_LOGI(TAG, "internet connection: %d", ret);
 }

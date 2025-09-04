@@ -30,6 +30,8 @@ static httpd_handle_t server = NULL;
 static const char * top_page_uri = NULL;
 static void (*on_scan_completed_callback)(void*) = NULL;
 static void * on_scan_completed_callback_arg = NULL;
+static void (*on_ap_connected_callback)(void*, uint32_t) = NULL;
+static void * on_ap_connected_callback_arg = NULL;
 
 static void wifi_init_softap(void);
 static httpd_handle_t start_webserver(void);
@@ -75,6 +77,7 @@ void wifiui_start(const wifiui_page_t* top_page)
     // Create default event loop needed by the  main app
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &wifi_event_handler, NULL, NULL);
+    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL);
 
 
     // Initialize Wi-Fi including netif with default config
@@ -202,13 +205,15 @@ httpd_handle_t start_webserver(void)
     return server;
 }
 
-esp_err_t wifiui_connect_to_ap(const char* ssid, const char* password)
+esp_err_t wifiui_connect_to_ap(const char* ssid, const char* password, wifi_auth_mode_t auth_mode)
 {
+    if(auth_mode == WIFI_AUTH_MAX) auth_mode = WIFI_AUTH_WPA_WPA2_PSK;
+
     wifi_config_t sta_config = {
         .sta = {
             // .ssid = ssid,
             // .password = password,
-            .threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK,
+            .threshold.authmode = auth_mode,
         },
     };
     strncpy((char*)sta_config.sta.ssid, ssid, sizeof(sta_config.sta.ssid));
@@ -225,6 +230,13 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id
     {
         if(on_scan_completed_callback != NULL) {
             on_scan_completed_callback(on_scan_completed_callback_arg);
+        }
+    }
+    else if(event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+    {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        if(on_ap_connected_callback != NULL) {
+            on_ap_connected_callback(on_ap_connected_callback_arg, (uint32_t)event->ip_info.ip.addr);
         }
     }
 }
@@ -488,6 +500,12 @@ void wifiui_set_ssid_scan_callback(void (*callback)(void*), void* arg)
 {
     on_scan_completed_callback = callback;
     on_scan_completed_callback_arg = arg;
+}
+
+void wifiui_set_ap_connected_callback(void (*callback)(void* arg, uint32_t ip_addr), void* arg)
+{
+    on_ap_connected_callback = callback;
+    on_ap_connected_callback_arg = arg;
 }
 
 esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst)

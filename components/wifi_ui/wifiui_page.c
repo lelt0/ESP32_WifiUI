@@ -93,7 +93,7 @@ const char * html_head_template;
 const char * html_websocket_template;
 char* wifiui_generate_page_html(const wifiui_page_t* page)
 {
-    const size_t html_max = 4096;// TODO 
+    const size_t html_max = 8192;// TODO 
     char* html = (char*)malloc(html_max);
 
     
@@ -130,7 +130,8 @@ body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; line-height
 h1, h2, h3 { line-height: 1.2; } 
 button { padding: 0.6em 1.2em; font-size: 1rem; border: none; border-radius: 0.5em; background: #0078ff; color: white; cursor: pointer; } button:hover { background: #005fcc; } 
 img, video { max-width: 100%%; height: auto; display: block; margin: 1rem 0; } 
-textarea { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding-left: 0.5em; padding-right: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 6px; }
+textarea { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 6px; }
+input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 6px; }
 @media (max-width: 600px) { body { padding: 0.8rem; font-size: 0.95rem; } button { width: 100%%; } } 
 @media (min-width: 601px) { body { font-size: 1.05rem; } }
 </style>

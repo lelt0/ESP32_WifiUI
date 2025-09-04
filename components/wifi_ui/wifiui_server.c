@@ -384,7 +384,7 @@ esp_err_t redirect_handler(httpd_req_t *req)
     esp_netif_ip_info_t ip_info;
     get_current_ap_ip(&ip_info);
     char redirect_url[64];
-    snprintf(redirect_url, sizeof(redirect_url), "http://" IPSTR "%s", IP2STR(&ip_info.ip), top_page_uri);
+    snprintf(redirect_url, sizeof(redirect_url), "%s", top_page_uri);
 
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_hdr(req, "Location", redirect_url);
@@ -494,14 +494,14 @@ void wifiui_print_server_status()
 
 esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst)
 {
-    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
     if(!sta_netif) return ESP_FAIL;
     return esp_netif_get_ip_info(sta_netif, dst);
 }
 
 esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst)
 {
-    esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if(!ap_netif) return ESP_FAIL;
     return esp_netif_get_ip_info(ap_netif, dst);
 }

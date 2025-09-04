@@ -26,7 +26,7 @@ char* create_partial_html(const wifiui_element_t* self_)
     size_t buf_size = strlen(self->text) + 1024; // TODO
     char* buf = (char*)malloc(buf_size);
     snprintf(buf, buf_size - 1, 
-        "<p id='%s'>%s</p>"
+        "<p class='wrap_text' id='%s'>%s</p>"
         "<script>"
             "ws_actions[%d]=function(data){"
                 "document.getElementById('%s').innerText = cstr2str(data);"

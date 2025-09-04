@@ -18,8 +18,8 @@ const wifiui_element_link_t * wifiui_element_link(const char* text, const wifiui
 char* create_partial_html(const wifiui_element_t* self)
 {
     wifiui_element_link_t* self_link = (wifiui_element_link_t*)self;
-    size_t buf_size = strlen(self_link->text) + 32; // TODO
+    size_t buf_size = strlen(self_link->text) + 64; // TODO
     char* buf = (char*)malloc(buf_size);
-    snprintf(buf, buf_size, "<p><a href='%s'>%s</a></p>", self_link->url, self_link->text);
+    snprintf(buf, buf_size, "<p class='wrap_text'><a href='%s'>%s</a></p>", self_link->url, self_link->text);
     return buf;
 }

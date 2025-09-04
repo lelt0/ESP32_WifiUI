@@ -17,8 +17,8 @@ const wifiui_element_stext_t * wifiui_element_static_text(const char* text)
 char* create_partial_html(const wifiui_element_t* self)
 {
     wifiui_element_stext_t* self_stext = (wifiui_element_stext_t*)self;
-    size_t buf_size = strlen(self_stext->text) + 16; // TODO
+    size_t buf_size = strlen(self_stext->text) + 32; // TODO
     char* buf = (char*)malloc(buf_size);
-    snprintf(buf, buf_size, "<p>%s</p>", self_stext->text);
+    snprintf(buf, buf_size, "<p class='wrap_text'>%s</p>", self_stext->text);
     return buf;
 }

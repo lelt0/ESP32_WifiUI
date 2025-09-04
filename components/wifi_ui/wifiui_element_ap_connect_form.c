@@ -23,24 +23,35 @@ char* create_partial_html(const wifiui_element_t* self)
     size_t buf_size = 2048; // TODO
     char* buf = (char*)malloc(buf_size);
     snprintf(buf, buf_size, 
-        "<p>"
         "<button id='%s_scan' onclick='fetch(location.origin + location.pathname + \"?eid=%s&func=scan\", {method:\"POST\"})'>scan available SSID</button><br>"
-        "<input id='%s_ssid' type='text' list='%s_ssid_options' placeholder='SSID' autocomplete='off' required>"
-            "<datalist id='%s_ssid_options'><option value='aaa'><option value='bbb'><option value='ccc'></datalist><br>"
-        "<input id='%s_password' type='password' placeholder='password' required><br>"
+        "<input class='single_input combo_input' id='%s_ssid' type='text' placeholder='SSID' autocomplete='off'/>"
+            "<div class='combo_list' id='%s_ssid_list'></div>"
+        "<input class='single_input' id='%s_password' type='password' placeholder='password' autocomplete='off'/>"
         "<button id='%s_connect'>connect</button>"
-        "</p>"
         "<script>"
-        "const ssid_list = document.getElementById('%s_ssid_options');"
+        "const ssid_input = document.getElementById('%s_ssid');"
+        "const ssid_list = document.getElementById('%s_ssid_list');"
+        "function updateList(items) {"
+            "ssid_list.innerHTML = '';"
+            "items.forEach(v => {"
+                "const div = document.createElement('div');"
+                "div.className = 'combo_item';"
+                "div.textContent = v;"
+                "div.addEventListener('click', () => {"
+                "ssid_input.value = v;"
+                "ssid_list.style.display = 'none';"
+                "});"
+                "ssid_list.appendChild(div);"
+            "});"
+        "}"
+        "ssid_input.addEventListener('focus', () => {"
+            "if (ssid_list.children.length > 0) ssid_list.style.display = 'block';"
+        "});"
+        "ssid_input.addEventListener('blur', () => {"
+            "setTimeout(() => ssid_list.style.display = 'none', 200);"
+        "});"
         "ws_actions[%d]=function(data){"
-            "const options = JSON.parse(cstr2str(data));"
-            "const frag = document.createDocumentFragment();"
-            "for (const v of options) {"
-                "const opt = document.createElement('option');"
-                "opt.value = v;"
-                "frag.appendChild(opt);"
-            "}"
-            "ssid_list.replaceChildren(frag);"
+            "updateList(JSON.parse(cstr2str(data)));"
         "};"
         "document.getElementById('%s_connect').addEventListener('click', function() {"
             "fetch('?eid=%s&func=connect', { method: 'POST', body: document.getElementById('%s_ssid').value + '/' + document.getElementById('%s_password').value });"
@@ -50,11 +61,13 @@ char* create_partial_html(const wifiui_element_t* self)
         self_apform->common.id_str, self_apform->common.id_str,
         self_apform->common.id_str, 
         self_apform->common.id_str, 
-        self_apform->common.id_str, 
 
-        self_apform->common.id_str, self_apform->common.id, 
+        self_apform->common.id_str, self_apform->common.id_str, 
 
-        self_apform->common.id_str, self_apform->common.id_str, self_apform->common.id_str, self_apform->common.id_str
+        self_apform->common.id, 
+
+        self_apform->common.id_str, self_apform->common.id_str, 
+        self_apform->common.id_str, self_apform->common.id_str
     );
     return buf;
 }

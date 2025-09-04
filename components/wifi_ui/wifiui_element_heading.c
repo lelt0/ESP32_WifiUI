@@ -18,12 +18,12 @@ const wifiui_element_heading_t * wifiui_element_heading(const char* text, uint8_
 char* create_partial_html(const wifiui_element_t* self)
 {
     wifiui_element_heading_t* self_heading = (wifiui_element_heading_t*)self;
-    size_t buf_size = strlen(self_heading->text) + 16; // TODO
+    size_t buf_size = strlen(self_heading->text) + 32; // TODO
     char* buf = (char*)malloc(buf_size); // TODO
     if(self_heading->heading_level == 0){
-        snprintf(buf, buf_size, "<p>%s</p>", self_heading->text);
+        snprintf(buf, buf_size, "<p class='wrap_text'>%s</p>", self_heading->text);
     }else{
-        snprintf(buf, buf_size, "<h%u>%s</h%u>", self_heading->heading_level, self_heading->text, self_heading->heading_level);
+        snprintf(buf, buf_size, "<h%u class='wrap_text'>%s</h%u>", self_heading->heading_level, self_heading->text, self_heading->heading_level);
     }
     return buf;
 }

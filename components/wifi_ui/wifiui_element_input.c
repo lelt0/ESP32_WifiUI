@@ -27,7 +27,7 @@ char* create_partial_html(const wifiui_element_t* self)
     char* buf = (char*)malloc(buf_size);
     snprintf(buf, buf_size, 
         "<p>"
-        "<textarea id='%s' rows='1' placeholder='send to Ctrl+Enter'></textarea>"
+        "<textarea class='multi_input' id='%s' rows='1' placeholder='send to Ctrl+Enter'></textarea>"
         "<button id='%s_btn' onclick='eid=\"%s\"; t = document.getElementById(eid); ws_send_with_eid(%u, str2cstr(t.value)); %s'>%s</button>"
         "</p>"
         "<script>"

@@ -91,30 +91,26 @@ void register_page(wifiui_page_t * page)
 
 const char * html_head_template;
 const char * html_websocket_template;
-char* wifiui_generate_page_html(const wifiui_page_t* page)
+dstring_t* wifiui_generate_page_html(const wifiui_page_t* page)
 {
-    const size_t html_max = 8192;// TODO 
-    char* html = (char*)malloc(html_max);
-
+    dstring_t* html = dstring_create(1024);
     
-    int off = snprintf(html, html_max, html_head_template, page->title);
+    dstring_appendf(html, html_head_template, page->title);
     if(page->has_websocket)
     {
-        off += snprintf(html + off, html_max - off, "%s", html_websocket_template);
+        dstring_appendf(html, "%s", html_websocket_template);
     }
     for(int i = 0; i < page->element_count; i++) {
         wifiui_element_t* element = (wifiui_element_t*)page->elements[i];
         if(element->system.create_partial_html != NULL) {
             char* partial_html = element->system.create_partial_html(element);
-            off += snprintf(html + off, html_max - off, "%s", partial_html);
+            dstring_appendf(html, "%s", partial_html);
             free(partial_html);
         }
     }
-    off += snprintf(html + off, html_max - off, "</body></html>");
+    dstring_appendf(html, "</body></html>");
 
-    char* ret = strdup(html);
-    free(html);
-    return ret;
+    return html;
 }
 
 const char * html_head_template = R"(

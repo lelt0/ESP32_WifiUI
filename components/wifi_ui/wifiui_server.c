@@ -260,9 +260,9 @@ esp_err_t page_access_handler(httpd_req_t *req)
                 {
                     ESP_LOGI(TAG, "Serve page: %s \"%s\"", page->uri, page->title);
                     httpd_resp_set_type(req, "text/html");
-                    char * html = wifiui_generate_page_html(page);
-                    httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
-                    free(html);
+                    dstring_t* html = wifiui_generate_page_html(page);
+                    httpd_resp_send(req, html->str, HTTPD_RESP_USE_STRLEN);
+                    dstring_free(html);
                     return ESP_OK;
                 }
                 break;

@@ -101,9 +101,8 @@ void status_send_task(void *arg) {
             snprintf(update_text, 64, "This is dynamic text.\nChanged!%d", count);
             dtext1->change_text(dtext1, update_text);
         }
-        printf("[yatadebug] %d %s\n", count, dtext1->text);
 
-        if(count%10==0){
+        if(count%3==0){
             wifiui_print_server_status();
         }
 
@@ -142,9 +141,9 @@ void app_main(void)
     
     wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
     
-    char * html = wifiui_generate_page_html(top_page);
-    printf("HTML: %s\n", html);
-    free(html);
+    dstring_t* html = wifiui_generate_page_html(top_page);
+    printf("HTML: %s\n", html->str);
+    dstring_free(html);
 
     gpio_reset_pin(LED_GPIO);
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);

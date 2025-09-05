@@ -119,7 +119,6 @@ void posted(wifiui_element_t * self, httpd_req_t * req)
             if(strncmp(param, "scan", sizeof(param))==0)
             {
                 if(!self_apform->ssid_scanning) {
-                    printf("[yatadebug] SCAN\n");
                     self_apform->ssid_scanning = true;
                     wifiui_start_ssid_scan();
                 }
@@ -130,7 +129,6 @@ void posted(wifiui_element_t * self, httpd_req_t * req)
                 int ret = httpd_req_recv(req, buf, sizeof(buf)-1);
                 if (ret > 0) {
                     buf[ret] = 0;
-                    printf("[yatadebug] CONNECT body: %s\n", buf); // "username/password"
                     char * delimiter_ = strchr(buf, '/');
                     *delimiter_ = 0;
                     const char * ssid = buf;

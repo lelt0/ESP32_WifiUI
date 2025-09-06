@@ -4,7 +4,7 @@
 #include "wifiui_server.h"
 #include "esp_wifi.h"
 
-static char* create_partial_html(const wifiui_element_t* self);
+static dstring_t* create_partial_html(const wifiui_element_t* self);
 static void posted(wifiui_element_t * self, httpd_req_t * req);
 static void on_scan_completed(void* arg);
 static void on_ap_connected(void* self, uint32_t ip_addr);
@@ -18,24 +18,23 @@ static uint16_t available_ssid_count = 0;
 
 const wifiui_element_apConnectForm_t * wifiui_element_ap_connect_form(void (*on_connect_callback)(uint32_t ip_addr))
 {
-    wifiui_element_apConnectForm_t* handler = (wifiui_element_apConnectForm_t*)malloc(sizeof(wifiui_element_apConnectForm_t));
-    set_default_common(&handler->common, WIFIUI_AP_CONNECT_FORM, create_partial_html);
-    handler->common.system.on_post_from_this_element = posted;
+    wifiui_element_apConnectForm_t* self = (wifiui_element_apConnectForm_t*)malloc(sizeof(wifiui_element_apConnectForm_t));
+    set_default_common(&self->common, WIFIUI_AP_CONNECT_FORM, create_partial_html);
+    self->common.system.on_post_from_this_element = posted;
 
-    handler->on_connect = on_connect_callback;
-    handler->ssid_scanning = false;
-    wifiui_set_ssid_scan_callback(on_scan_completed, (void*)handler);
-    wifiui_set_ap_connected_callback(on_ap_connected, (void*)handler);
+    self->on_connect = on_connect_callback;
+    self->ssid_scanning = false;
+    wifiui_set_ssid_scan_callback(on_scan_completed, (void*)self);
+    wifiui_set_ap_connected_callback(on_ap_connected, (void*)self);
 
-    return handler;
+    return self;
 }
 
-char* create_partial_html(const wifiui_element_t* self)
+dstring_t* create_partial_html(const wifiui_element_t* self)
 {
     wifiui_element_apConnectForm_t* self_apform = (wifiui_element_apConnectForm_t*)self;
-    size_t buf_size = 2048; // TODO
-    char* buf = (char*)malloc(buf_size);
-    snprintf(buf, buf_size, 
+    dstring_t* html = dstring_create(2048);
+    dstring_appendf(html, 
         "<p>"
         "<button id='%s_scan'>Scan available SSID</button><br>"
         "<input class='single_input combo_input' id='%s_ssid' type='text' placeholder='SSID' autocomplete='off'/>"
@@ -103,7 +102,7 @@ char* create_partial_html(const wifiui_element_t* self)
         self_apform->common.id_str, self_apform->common.id_str, 
         self_apform->common.id
     );
-    return buf;
+    return html;
 }
 
 void posted(wifiui_element_t * self, httpd_req_t * req)

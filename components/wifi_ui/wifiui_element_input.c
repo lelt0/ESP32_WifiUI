@@ -1,31 +1,31 @@
 #include <string.h>
 #include <stdio.h>
 #include "wifiui_element_input.h"
+#include "dstring.h"
 
-static char* create_partial_html(const wifiui_element_t* self);
+static dstring_t* create_partial_html(const wifiui_element_t* self);
 static void on_recv_data(wifiui_element_t* self, const uint8_t* data, size_t len);
 
 const wifiui_element_input_t * wifiui_element_input(const char* button_label, void (*on_input_callback)(char*, void*), void* on_input_callback_param, bool clear_after_sent)
 {
-    wifiui_element_input_t* handler = (wifiui_element_input_t*)malloc(sizeof(wifiui_element_input_t));
-    set_default_common(&handler->common, WIFIUI_INPUT, create_partial_html);
-    handler->common.system.use_websocket = true;
-    handler->common.system.on_recv_data = on_recv_data;
+    wifiui_element_input_t* self = (wifiui_element_input_t*)malloc(sizeof(wifiui_element_input_t));
+    set_default_common(&self->common, WIFIUI_INPUT, create_partial_html);
+    self->common.system.use_websocket = true;
+    self->common.system.on_recv_data = on_recv_data;
 
-    handler->button_label = strdup(button_label);
-    handler->on_input = on_input_callback;
-    handler->on_input_param = on_input_callback_param;
-    handler->clear_after_sent = clear_after_sent;
+    self->button_label = strdup(button_label);
+    self->on_input = on_input_callback;
+    self->on_input_param = on_input_callback_param;
+    self->clear_after_sent = clear_after_sent;
 
-    return handler;
+    return self;
 }
 
-char* create_partial_html(const wifiui_element_t* self)
+dstring_t* create_partial_html(const wifiui_element_t* self)
 {
     wifiui_element_input_t* self_input = (wifiui_element_input_t*)self;
-    size_t buf_size = strlen(self_input->button_label) + 1024; // TODO
-    char* buf = (char*)malloc(buf_size);
-    snprintf(buf, buf_size, 
+    dstring_t* html = dstring_create(1024);
+    dstring_appendf(html, 
         "<p>"
         "<textarea class='multi_input' id='%s' rows='1' placeholder='send to Ctrl+Enter'></textarea>"
         "<button id='%s_btn' onclick='eid=\"%s\"; t = document.getElementById(eid); ws_send_with_eid(%u, str2cstr(t.value)); %s'>%s</button>"
@@ -43,7 +43,7 @@ char* create_partial_html(const wifiui_element_t* self)
         self_input->common.id_str , 
         self_input->common.id_str
     );
-    return buf;
+    return html;
 }
 
 void on_recv_data(wifiui_element_t* self, const uint8_t* data, size_t len)

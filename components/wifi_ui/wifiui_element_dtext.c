@@ -3,29 +3,28 @@
 #include "wifiui_element_dtext.h"
 #include "wifiui_server.h"
 
-static char* create_partial_html(const wifiui_element_t* self);
+static dstring_t* create_partial_html(const wifiui_element_t* self);
 static char* change_text_impl(const wifiui_element_dtext_t* self, const char* new_text);
 void on_recv_data(wifiui_element_t* self, const uint8_t* data, size_t len);
 
 const wifiui_element_dtext_t * wifiui_element_dynamic_text(const char* text)
 {
-    wifiui_element_dtext_t* handler = (wifiui_element_dtext_t*)malloc(sizeof(wifiui_element_dtext_t));
-    set_default_common(&handler->common, WIFIUI_DYNAMIC_TEXT, create_partial_html);
-    handler->common.system.use_websocket = true;
-    handler->common.system.on_recv_data = on_recv_data;
+    wifiui_element_dtext_t* self = (wifiui_element_dtext_t*)malloc(sizeof(wifiui_element_dtext_t));
+    set_default_common(&self->common, WIFIUI_DYNAMIC_TEXT, create_partial_html);
+    self->common.system.use_websocket = true;
+    self->common.system.on_recv_data = on_recv_data;
 
-    handler->text = strdup(text);
-    handler->change_text = change_text_impl;
+    self->text = strdup(text);
+    self->change_text = change_text_impl;
     
-    return handler;
+    return self;
 }
 
-char* create_partial_html(const wifiui_element_t* self_)
+dstring_t* create_partial_html(const wifiui_element_t* self_)
 {
     wifiui_element_dtext_t* self = (wifiui_element_dtext_t*)self_;
-    size_t buf_size = strlen(self->text) + 1024; // TODO
-    char* buf = (char*)malloc(buf_size);
-    snprintf(buf, buf_size - 1, 
+    dstring_t* html = dstring_create(256);
+    dstring_appendf(html, 
         "<p class='wrap_text' id='%s'>%s</p>"
         "<script>"
             "ws_actions[%d]=function(data){"
@@ -37,7 +36,7 @@ char* create_partial_html(const wifiui_element_t* self_)
         self->common.id, 
         self->common.id_str,
         self->common.id, self->common.id_str);
-    return buf;
+    return html;
 }
 
 char* change_text_impl(const wifiui_element_dtext_t* self, const char* new_text)

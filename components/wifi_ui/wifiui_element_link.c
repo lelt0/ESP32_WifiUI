@@ -2,24 +2,23 @@
 #include <stdio.h>
 #include "wifiui_element_link.h"
 
-static char* create_partial_html(const wifiui_element_t* self);
+static dstring_t* create_partial_html(const wifiui_element_t* self);
 
 const wifiui_element_link_t * wifiui_element_link(const char* text, const wifiui_page_t * destination)
 {
-    wifiui_element_link_t* handler = (wifiui_element_link_t*)malloc(sizeof(wifiui_element_link_t));
-    set_default_common(&handler->common, WIFIUI_LINK, create_partial_html);
+    wifiui_element_link_t* self = (wifiui_element_link_t*)malloc(sizeof(wifiui_element_link_t));
+    set_default_common(&self->common, WIFIUI_LINK, create_partial_html);
 
-    handler->text = strdup(text);
-    handler->url = destination->uri;
+    self->text = strdup(text);
+    self->url = destination->uri;
 
-    return handler;
+    return self;
 }
 
-char* create_partial_html(const wifiui_element_t* self)
+dstring_t* create_partial_html(const wifiui_element_t* self)
 {
     wifiui_element_link_t* self_link = (wifiui_element_link_t*)self;
-    size_t buf_size = strlen(self_link->text) + 64; // TODO
-    char* buf = (char*)malloc(buf_size);
-    snprintf(buf, buf_size, "<p class='wrap_text'><a href='%s'>%s</a></p>", self_link->url, self_link->text);
-    return buf;
+    dstring_t* html = dstring_create(128);
+    dstring_appendf(html, "<p class='wrap_text'><a href='%s'>%s</a></p>", self_link->url, self_link->text);
+    return html;
 }

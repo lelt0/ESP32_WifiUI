@@ -6,6 +6,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <esp_http_server.h>
+#include "dstring.h"
 
 typedef uint16_t wifiui_element_id;
 
@@ -20,7 +21,7 @@ typedef enum {
 } wifiui_element_type;
 
 typedef struct wifiui_element wifiui_element_t;
-typedef char* (*create_partial_html_f)(const wifiui_element_t*);
+typedef dstring_t* (*create_partial_html_f)(const wifiui_element_t*);
 struct wifiui_element {
     wifiui_element_type type;
     wifiui_element_id id;

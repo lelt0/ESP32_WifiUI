@@ -7,9 +7,9 @@ static void dstr_realloc(dstring_t* dstr, size_t required_len);
 dstring_t* dstring_create(size_t unit_length)
 {
     dstring_t* dstr = (dstring_t*)malloc(sizeof(dstring_t));
-    dstr->str = (char*)malloc(unit_length * 2);
+    dstr->str = (char*)malloc(unit_length);
     dstr->len = 0;
-    dstr->capacity = unit_length * 2;
+    dstr->capacity = unit_length;
     dstr->unit_len = unit_length;
     return dstr;
 }

@@ -103,9 +103,9 @@ dstring_t* wifiui_generate_page_html(const wifiui_page_t* page)
     for(int i = 0; i < page->element_count; i++) {
         wifiui_element_t* element = (wifiui_element_t*)page->elements[i];
         if(element->system.create_partial_html != NULL) {
-            char* partial_html = element->system.create_partial_html(element);
-            dstring_appendf(html, "%s", partial_html);
-            free(partial_html);
+            dstring_t* partial_html = element->system.create_partial_html(element);
+            dstring_appendf(html, "%s", partial_html->str);
+            dstring_free(partial_html);
         }
     }
     dstring_appendf(html, "</body></html>");

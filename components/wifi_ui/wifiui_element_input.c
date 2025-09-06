@@ -6,16 +6,17 @@
 static dstring_t* create_partial_html(const wifiui_element_t* self);
 static void on_recv_data(wifiui_element_t* self, const uint8_t* data, size_t len);
 
-const wifiui_element_input_t * wifiui_element_input(const char* button_label, void (*on_input_callback)(char*, void*), void* on_input_callback_param, bool clear_after_sent)
+const wifiui_element_input_t * wifiui_element_input(const char* button_label, void (*on_input_callback)(char*, void*), void* on_input_callback_param, const char* placeholder_text, bool clear_after_sent)
 {
     wifiui_element_input_t* self = (wifiui_element_input_t*)malloc(sizeof(wifiui_element_input_t));
     set_default_common(&self->common, WIFIUI_INPUT, create_partial_html);
     self->common.system.use_websocket = true;
     self->common.system.on_recv_data = on_recv_data;
 
-    self->button_label = strdup(button_label);
+    self->button_label = ((button_label != NULL)? strdup(button_label) : "Send");
     self->on_input = on_input_callback;
     self->on_input_param = on_input_callback_param;
+    self->placeoholder_text = ((placeholder_text != NULL)? strdup(placeholder_text) : "send to Ctrl+Enter");
     self->clear_after_sent = clear_after_sent;
 
     return self;
@@ -27,7 +28,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
     dstring_t* html = dstring_create(1024);
     dstring_appendf(html, 
         "<p>"
-        "<textarea class='multi_input' id='%s' rows='1' placeholder='send to Ctrl+Enter'></textarea>"
+        "<textarea class='multi_input' id='%s' rows='1' placeholder='%s'></textarea>"
         "<button id='%s_btn' onclick='eid=\"%s\"; t = document.getElementById(eid); ws_send_with_eid(%u, str2cstr(t.value)); %s'>%s</button>"
         "</p>"
         "<script>"
@@ -36,7 +37,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
         "window.addEventListener('load', function(){ fit_textarea_height('%s'); });"
         "window.addEventListener('resize', function(){ fit_textarea_height('%s'); });"
         "</script>",
-        self_input->common.id_str, 
+        self_input->common.id_str, self_input->placeoholder_text,
         self_input->common.id_str, self_input->common.id_str, self_input->common.id, (self_input->clear_after_sent?"t.value = \"\"; fit_textarea_height(eid);":""), self_input->button_label,
         self_input->common.id_str, self_input->common.id_str, 
         self_input->common.id_str, self_input->common.id_str, 

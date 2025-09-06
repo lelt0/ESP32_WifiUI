@@ -135,7 +135,7 @@ void app_main(void)
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG")));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto second page", second_page));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, true));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, NULL, true));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(internet_connected));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext2 = wifiui_element_dynamic_text("current IP as STA: --")));
     

@@ -8,6 +8,7 @@ static dstring_t* create_partial_html(const wifiui_element_t* self);
 static void posted(wifiui_element_t * self, httpd_req_t * req);
 static void on_scan_completed(void* arg);
 static void on_ap_connected(void* self, uint32_t ip_addr);
+static void on_ap_disconnected(void* self, uint8_t reason);
 
 typedef struct {
     char ssid[33];
@@ -26,6 +27,7 @@ const wifiui_element_apConnectForm_t * wifiui_element_ap_connect_form(void (*on_
     self->ssid_scanning = false;
     wifiui_set_ssid_scan_callback(on_scan_completed, (void*)self);
     wifiui_set_ap_connected_callback(on_ap_connected, (void*)self);
+    wifiui_set_ap_disconnected_callback(on_ap_disconnected, (void*)self);
 
     return self;
 }
@@ -33,7 +35,7 @@ const wifiui_element_apConnectForm_t * wifiui_element_ap_connect_form(void (*on_
 dstring_t* create_partial_html(const wifiui_element_t* self)
 {
     wifiui_element_apConnectForm_t* self_apform = (wifiui_element_apConnectForm_t*)self;
-    dstring_t* html = dstring_create(2048);
+    dstring_t* html = dstring_create(2500);
     dstring_appendf(html, 
         "<p>"
         "<button id='%s_scan'>Scan available SSID</button><br>"
@@ -49,6 +51,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
             "const ssid_list = document.getElementById('%s_ssid_list');"
             "const password_input = document.getElementById('%s_password');"
             "const connect_button = document.getElementById('%s_connect');"
+            "const connect_button_dafault_text = 'Connect';"
             "function updateList(items) {"
                 "ssid_list.innerHTML = '';"
                 "items.forEach(v => {"
@@ -80,15 +83,24 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
                 "setTimeout(() => ssid_list.style.display = 'none', 200);"
             "});"
             "connect_button.addEventListener('click', function() {"
+                "connect_button.textContent = 'connecting...';"
+                "setTimeout(() => connect_button.textContent = connect_button_dafault_text, 10000);"
                 "fetch('?eid=%s&func=connect', { method: 'POST', body: ssid_input.value + '/' + password_input.value });"
             "});"
             "ws_actions[%d]=function(data){"
-                "console.log('[yatadebug] ' + cstr2str(data));"
-                "updateList(JSON.parse(cstr2str(data)));"
-                "scan_button.textContent = 'done';"
-                "setTimeout(() => scan_button_enabled(), 500);"
+                "const str = cstr2str(data);"
+                "console.log('[yatadebug] ' + str);"
+                "if(str.startsWith('#')) {"
+                    "connect_button.textContent = str.substring(1);"
+                    "setTimeout(() => connect_button.textContent = connect_button_dafault_text, 1000);"
+                "} else {"
+                    "updateList(JSON.parse(str));"
+                    "scan_button.textContent = 'done';"
+                    "setTimeout(() => scan_button_enabled(), 500);"
+                "}"
             "};"
             "scan_button_enabled();"
+            "connect_button.textContent = connect_button_dafault_text;"
         "}"
         "</script>",
         self_apform->common.id_str, self_apform->common.id_str, 
@@ -126,7 +138,7 @@ void posted(wifiui_element_t * self, httpd_req_t * req)
             {
                 char buf[100];
                 int ret = httpd_req_recv(req, buf, sizeof(buf)-1);
-                if (ret > 0) {
+                if(ret > 0) {
                     buf[ret] = 0;
                     char * delimiter_ = strchr(buf, '/');
                     *delimiter_ = 0;
@@ -140,7 +152,7 @@ void posted(wifiui_element_t * self, httpd_req_t * req)
                             break;
                         }
                     }
-                    esp_err_t ret = wifiui_connect_to_ap(ssid, password, auth_mode);
+                    wifiui_connect_to_ap(ssid, password, auth_mode);
                 }
             }
         }
@@ -178,16 +190,37 @@ void on_scan_completed(void* arg)
             off += snprintf(ssid_list_json + off, total_len - off, "\"%s\"", available_ssid[i].ssid);
     }
     off += snprintf(ssid_list_json + off, total_len - off, "]");
-    wifiui_element_send_data(&self_apform->common, ssid_list_json, strlen(ssid_list_json));
+    wifiui_element_send_data(&self_apform->common, ssid_list_json, strlen(ssid_list_json) + 1);
     free(ssid_list_json);
 
     self_apform->ssid_scanning = false;
 }
 
-static void on_ap_connected(void* self, uint32_t ip_addr)
+void on_ap_connected(void* self, uint32_t ip_addr)
 {
     wifiui_element_apConnectForm_t *self_apform = (wifiui_element_apConnectForm_t*) self;
+
+    char* msg = "#connected!";
+    wifiui_element_send_data(&self_apform->common, msg, strlen(msg) + 1);
+
     if(self_apform->on_connect != NULL) {
         self_apform->on_connect(ip_addr);
     }
+}
+
+void on_ap_disconnected(void* self, uint8_t reason)
+{
+    wifiui_element_apConnectForm_t *self_apform = (wifiui_element_apConnectForm_t*) self;
+    const char* reason_msg = "#disconnected";
+    switch (reason) {
+        case WIFI_REASON_AUTH_FAIL:
+            reason_msg = "#authentication failed";
+            break;
+        case WIFI_REASON_NO_AP_FOUND:
+            reason_msg = "#no AP found";
+            break;
+        default:
+            break;
+    }
+    wifiui_element_send_data(&self_apform->common, reason_msg, strlen(reason_msg) + 1);
 }

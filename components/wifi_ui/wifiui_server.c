@@ -32,6 +32,8 @@ static void (*on_scan_completed_callback)(void*) = NULL;
 static void * on_scan_completed_callback_arg = NULL;
 static void (*on_ap_connected_callback)(void*, uint32_t) = NULL;
 static void * on_ap_connected_callback_arg = NULL;
+static void (*on_ap_disconnected_callback)(void*, uint8_t) = NULL;
+static void * on_ap_disconnected_callback_arg = NULL;
 
 static void wifi_init_softap(void);
 static httpd_handle_t start_webserver(void);
@@ -77,6 +79,7 @@ void wifiui_start(const wifiui_page_t* top_page)
     // Create default event loop needed by the  main app
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &wifi_event_handler, NULL, NULL);
+    esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &wifi_event_handler, NULL, NULL);
     esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL);
 
 
@@ -207,6 +210,8 @@ httpd_handle_t start_webserver(void)
 
 esp_err_t wifiui_connect_to_ap(const char* ssid, const char* password, wifi_auth_mode_t auth_mode)
 {
+    esp_wifi_disconnect();
+
     if(auth_mode == WIFI_AUTH_MAX) auth_mode = WIFI_AUTH_WPA_WPA2_PSK;
 
     wifi_config_t sta_config = {
@@ -237,6 +242,13 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         if(on_ap_connected_callback != NULL) {
             on_ap_connected_callback(on_ap_connected_callback_arg, (uint32_t)event->ip_info.ip.addr);
+        }
+    }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
+    {
+        wifi_event_sta_disconnected_t* disconn = (wifi_event_sta_disconnected_t*) event_data;
+        if(on_ap_disconnected_callback != NULL) {
+            on_ap_disconnected_callback(on_ap_disconnected_callback_arg, disconn->reason);
         }
     }
 }
@@ -506,6 +518,12 @@ void wifiui_set_ap_connected_callback(void (*callback)(void* arg, uint32_t ip_ad
 {
     on_ap_connected_callback = callback;
     on_ap_connected_callback_arg = arg;
+}
+
+void wifiui_set_ap_disconnected_callback(void (*callback)(void* arg, uint8_t reason), void* arg)
+{
+    on_ap_disconnected_callback = callback;
+    on_ap_disconnected_callback_arg = arg;
 }
 
 esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst)

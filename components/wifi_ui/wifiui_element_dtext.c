@@ -41,8 +41,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self_)
 
 char* change_text_impl(const wifiui_element_dtext_t* self, const char* new_text)
 {
-    size_t data_len = strlen(new_text) + 1;
-    wifiui_element_send_data(&self->common, new_text, data_len);
+    wifiui_element_send_data(&self->common, new_text, strlen(new_text) + 1);
     return ""; // TODO
 }
 

@@ -16,6 +16,7 @@ void wifiui_set_ssid_scan_callback(void (*callback)(void*), void* arg);
 
 esp_err_t wifiui_connect_to_ap(const char* ssid, const char* password, wifi_auth_mode_t auth_mode);
 void wifiui_set_ap_connected_callback(void (*callback)(void* arg, uint32_t ip_addr), void* arg);
+void wifiui_set_ap_disconnected_callback(void (*callback)(void* arg, uint8_t reason), void* arg);
 
 void wifiui_print_server_status();
 

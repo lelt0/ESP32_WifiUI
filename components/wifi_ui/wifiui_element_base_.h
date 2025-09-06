@@ -18,6 +18,7 @@ typedef enum {
     WIFIUI_LINK,
     WIFIUI_INPUT,
     WIFIUI_AP_CONNECT_FORM,
+    WIFIUI_MESSAGE_LOG,
 } wifiui_element_type;
 
 typedef struct wifiui_element wifiui_element_t;

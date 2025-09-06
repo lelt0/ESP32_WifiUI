@@ -16,6 +16,7 @@
 #include "wifiui_element_link.h"
 #include "wifiui_element_input.h"
 #include "wifiui_element_ap_connect_form.h"
+#include "wifiui_element_message_log.h"
 
 static const char *TAG = "example";
 
@@ -28,34 +29,6 @@ static const char *TAG = "example";
 //     ESP_LOGD(TAG, "Current free heap: %u bytes\n", (unsigned int)free_heap);
 //     ESP_LOGD(TAG, "Minimum free heap ever: %u bytes\n", (unsigned int)min_free_heap);
 // }
-
-static vprintf_like_t s_orig_vprintf = NULL;  // オリジナルのログ関数ポインタ
-static bool s_in_my_log = false;              // ログ関数再帰防止フラグ
-static int my_log_vprintf(const char *fmt, va_list args)
-{
-//     if (s_in_my_log) {
-        // すでに自分の中なら、オリジナルログ関数だけ呼んで終わり
-        return s_orig_vprintf(fmt, args);
-//     }
-
-//     s_in_my_log = true;
-
-//     static char buf[256];
-//     va_list args_copy;
-//     va_copy(args_copy, args);
-//     int len = vsnprintf(buf, sizeof(buf), fmt, args_copy);
-//     va_end(args_copy);
-
-//     if (len > 0) {
-//         send_log(buf, len);
-//     }
-
-//     // 元のログ関数でUART出力
-//     int ret = s_orig_vprintf(fmt, args);
-
-//     s_in_my_log = false;
-//     return ret;
-}
 
 #define LED_GPIO 19
 static bool led_status = true;
@@ -125,8 +98,6 @@ void internet_connected(uint32_t ip_addr)
 
 void app_main(void)
 {
-    s_orig_vprintf = esp_log_set_vprintf(my_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
-
     wifiui_page_t* top_page = wifiui_create_page("WifiUI Sample");
     wifiui_page_t* second_page = wifiui_create_page("2nd page");
 
@@ -135,9 +106,10 @@ void app_main(void)
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG")));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto second page", second_page));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, NULL, true));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(internet_connected));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext2 = wifiui_element_dynamic_text("current IP as STA: --")));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_message_log(true));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, NULL, true));
     
     wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
     

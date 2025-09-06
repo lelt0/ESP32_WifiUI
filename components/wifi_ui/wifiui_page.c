@@ -132,6 +132,7 @@ img, video { max-width: 100%%; height: auto; display: block; margin: 1rem 0; }
 .combo_list { top: 100%%; left: 0; right: 0; border: 1px solid #ccc; border-top: none; overflow-y: auto; display: none; z-index: 1000; }
 .combo_item { padding: 6px 8px; cursor: pointer; }
 .combo_item:hover { background: #def; }
+.message_log {width: 100%%; height: 200px; border: 1px solid #ccc; resize: none; overflow-y: auto; word-break: break-all; overflow-wrap: break-word; }
 @media (max-width: 600px) { body { padding: 0.8rem; font-size: 0.95rem; } button { width: 100%%; } } 
 @media (min-width: 601px) { body { font-size: 1.05rem; } }
 </style>

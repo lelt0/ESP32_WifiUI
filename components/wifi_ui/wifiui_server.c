@@ -312,7 +312,7 @@ esp_err_t page_access_handler(httpd_req_t *req)
 
 esp_err_t websocket_handler(httpd_req_t *req)
 {
-    ESP_LOGI(TAG, "ACCESS: %s %s", req->uri, http_method_str(req->method));
+    ESP_LOGD(TAG, "ACCESS: %s %s", req->uri, http_method_str(req->method));
 
     int sock_fd = httpd_req_to_sockfd(req);
     
@@ -374,7 +374,7 @@ esp_err_t websocket_handler(httpd_req_t *req)
             return ret;
         }
         wifiui_element_id element_id = *((wifiui_element_id*)(ws_pkt.payload));
-        ESP_LOGI(TAG, "[WebSocket] data recved from eid:%u", element_id);
+        ESP_LOGD(TAG, "[WebSocket] data recved from eid:%u", element_id);
         wifiui_element_t* sent_element = wifiui_find_element(NULL, element_id);
         if(sent_element->system.on_recv_data != NULL)
         {

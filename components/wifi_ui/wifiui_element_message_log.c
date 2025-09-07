@@ -6,7 +6,7 @@
 
 static dstring_t* create_partial_html(const wifiui_element_t* self);
 static void mirror_log_init(const wifiui_element_msglog_t* mirror_log_element);
-static void print_message(const wifiui_element_t* self, const char* message);
+static void print_message(const wifiui_element_msglog_t* self, const char* message);
 
 const wifiui_element_msglog_t * wifiui_element_message_log(bool mirror_log_mode)
 {
@@ -82,7 +82,7 @@ static int mirror_log_vprintf(const char *fmt, va_list args)
     return ret;
 }
 
-void print_message(const wifiui_element_t* self, const char* message)
+void print_message(const wifiui_element_msglog_t* self, const char* message)
 {
-    wifiui_element_send_data(self, message, strlen(message) + 1);
+    wifiui_element_send_data(&self->common, message, strlen(message) + 1);
 }

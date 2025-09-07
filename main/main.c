@@ -18,82 +18,74 @@
 #include "wifiui_element_ap_connect_form.h"
 #include "wifiui_element_message_log.h"
 
-static const char *TAG = "example";
+static const char *TAG = "sample";
 
-// static void print_memory(void)
-// {
-//     UBaseType_t high_water_mark = uxTaskGetStackHighWaterMark(NULL);
-//     ESP_LOGD(TAG, "Stack high water mark: %u words\n", (unsigned int)high_water_mark);
-//     size_t free_heap = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
-//     size_t min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
-//     ESP_LOGD(TAG, "Current free heap: %u bytes\n", (unsigned int)free_heap);
-//     ESP_LOGD(TAG, "Minimum free heap ever: %u bytes\n", (unsigned int)min_free_heap);
-// }
-
-#define LED_GPIO 19
-static bool led_status = true;
-void toggle_led(const wifiui_element_button_t * dummy, void* arg) {
-    led_status = !led_status;
-    gpio_set_level(LED_GPIO, led_status);
-    ESP_LOGI(TAG, "LED toggled to %s", led_status ? "ON" : "OFF");
-}
-
-// void status_send_task(void *arg) {
-//     int count = 0;
-//     while (1) {
-//         vTaskDelay(pdMS_TO_TICKS(1000));
-
-//         // 起動時間取得
-//         double time = esp_timer_get_time() / 1000000.0;
-
-//         // STA IP取得
-//         esp_netif_ip_info_t ip_info = {0};
-//         get_current_sta_ip(&ip_info);
-
-//         // 出力
-//         static char buf[64];
-//         snprintf(buf, sizeof(buf), "time: %.3lfsec\nLED: %s\nSTA IP: " IPSTR, time, (led_status?"ON":"OFF"), IP2STR(&ip_info.ip));
-//         send_status(buf, strlen(buf));
-//         ESP_LOGI(TAG, "sent: %.3lfs %d " IPSTR, time, led_status, IP2STR(&ip_info.ip));
-
-//         if(count%10==0) print_connections(TAG);
-
-//         count++;
-//     }
-// }
-
-const wifiui_element_dtext_t* dtext1 = NULL;
+const wifiui_element_dtext_t* dtext_time = NULL;
 void status_send_task(void *arg) {
-    int count = 0;
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
 
-        if(dtext1 != NULL)
+        if(dtext_time != NULL)
         {
+            double time = esp_timer_get_time() / 1000000.0;
             char update_text[64];
-            snprintf(update_text, 64, "This is dynamic text.\nChanged!%d", count);
-            dtext1->change_text(dtext1, update_text);
+            snprintf(update_text, 32, "Boot time: %6.3lfs", time);
+            dtext_time->change_text(dtext_time, update_text);
         }
-
-        if(count%3==0){
-            wifiui_print_server_status();
-        }
-
-        count++;
     }
 }
 
-void input_callback(char* str, void* param)
+#define LED_GPIO 19
+static bool led_status = true;
+const wifiui_element_dtext_t* dtext_led = NULL;
+void toggle_led(const wifiui_element_button_t * dummy, void* arg)
 {
-    ESP_LOGI(TAG, "[yatadebug] INPUT: %s", str);
+    led_status = !led_status;
+    gpio_set_level(LED_GPIO, led_status);
+
+    if(dtext_led != NULL) {
+        if(led_status){
+            dtext_led->change_text(dtext_led, "LED status: <font color='#00C000'><b>ON</b></font>");
+        }else{
+            dtext_led->change_text(dtext_led, "LED status: <font color='#C00000'><b>OFF</b></font>");
+        }
+    }
 }
 
-const wifiui_element_dtext_t* dtext2 = NULL;
+const wifiui_element_msglog_t* msglog = NULL;
+void input_callback(char* str, void* param)
+{
+    ESP_LOGI(TAG, "INPUT: %s", str);
+    {
+        size_t buf_len = 16 + strlen(str);
+        char buf[buf_len];
+        snprintf(buf, buf_len, "INPUT: %s\n", str);
+        if(msglog != NULL) msglog->print_message(msglog, buf);
+    }
+
+    if(strcmp(str, "mem") == 0)
+    {
+        // print free memory
+        UBaseType_t high_water_mark = uxTaskGetStackHighWaterMark(NULL);
+        ESP_LOGI(TAG, "Stack high water mark: %u words", (unsigned int)high_water_mark);
+        size_t free_heap = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+        size_t min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
+        ESP_LOGI(TAG, "Current free heap: %u bytes", (unsigned int)free_heap);
+        ESP_LOGI(TAG, "Minimum free heap ever: %u bytes", (unsigned int)min_free_heap);
+    }
+    else if(strcmp(str, "server") == 0)
+    {
+        // print server status
+        wifiui_print_server_status();
+    }
+}
+
+const wifiui_element_dtext_t* dtext_staip = NULL;
 void internet_connected(uint32_t ip_addr)
 {
-    char ip_str[40];
+    char ip_str[64];
     snprintf(ip_str, sizeof(ip_str), "current IP as STA: " IPSTR, IP2STR((esp_ip4_addr_t*)&ip_addr));
-    if(dtext2 != NULL) dtext2->change_text(dtext2, ip_str);
+    if(dtext_staip != NULL) dtext_staip->change_text(dtext_staip, ip_str);
 }
 
 void app_main(void)
@@ -102,16 +94,27 @@ void app_main(void)
     wifiui_page_t* second_page = wifiui_create_page("2nd page");
 
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<b>This is static text.</b>\nHello, World!"));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<b>This is WifiUI sample page.</b>\nHello, World!"));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_time = wifiui_element_dynamic_text("Boot time: --")));
+
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Button Control", 2));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
-    wifiui_add_element(top_page, (const wifiui_element_t*) (dtext1 = wifiui_element_dynamic_text("This is dynamic text.\nABCDEFG")));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_led = wifiui_element_dynamic_text("LED status: --")));
+
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Link", 2));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto second page", second_page));
+
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("AP Connection", 2));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(internet_connected));
-    wifiui_add_element(top_page, (const wifiui_element_t*) (dtext2 = wifiui_element_dynamic_text("current IP as STA: --")));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_message_log(true));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_staip = wifiui_element_dynamic_text("current IP as STA: --")));
+
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Mirror Console", 2));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (msglog = wifiui_element_message_log(true)));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, NULL, true));
+
     
     wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
+
     
     dstring_t* html = wifiui_generate_page_html(top_page);
     printf("HTML: %s\n", html->str);

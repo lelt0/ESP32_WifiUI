@@ -28,7 +28,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self_)
         "<p class='wrap_text' id='%s'>%s</p>"
         "<script>"
             "ws_actions[%d]=function(data){"
-                "document.getElementById('%s').innerText = cstr2str(data);"
+                "document.getElementById('%s').innerHTML = cstr2str(data);"
                 "ws_send_with_eid(%d, str2cstr(document.getElementById('%s').innerText))"
             "}"
         "</script>", 

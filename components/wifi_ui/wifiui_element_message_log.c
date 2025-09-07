@@ -13,12 +13,9 @@ const wifiui_element_msglog_t * wifiui_element_message_log(bool mirror_log_mode)
     wifiui_element_msglog_t* self = (wifiui_element_msglog_t*)malloc(sizeof(wifiui_element_msglog_t));
     set_default_common(&self->common, WIFIUI_MESSAGE_LOG, create_partial_html);
 
+    self->print_message = print_message;
     if(mirror_log_mode) {
-        self->print_message = NULL;
         mirror_log_init(self);
-    }
-    else{
-        self->print_message = print_message;
     }
 
     return self;
@@ -50,10 +47,17 @@ static vprintf_like_t s_orig_vprintf = NULL;  // オリジナルのログ関数�
 static bool in_mirror_log = false;              // ログ関数再帰防止フラグ
 static int mirror_log_vprintf(const char *fmt, va_list args);
 static const wifiui_element_msglog_t* s_mirror_log_element = NULL;
+#define min(a, b) (((a)<(b))?(a):(b))
 void mirror_log_init(const wifiui_element_msglog_t* mirror_log_element)
 {
+    if(s_mirror_log_element != NULL)
+    {
+        ESP_LOGW("WIFIUI_MSG_LOG_ELEMENT", "mirror_log already exists. the wifiui system can only have one mirror_log.");
+        return;
+    }
+
     s_mirror_log_element = mirror_log_element;
-    s_orig_vprintf = esp_log_set_vprintf(mirror_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
+    if(s_orig_vprintf == NULL) s_orig_vprintf = esp_log_set_vprintf(mirror_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
 }
 static int mirror_log_vprintf(const char *fmt, va_list args)
 {
@@ -69,7 +73,7 @@ static int mirror_log_vprintf(const char *fmt, va_list args)
     int len = vsnprintf(buf, sizeof(buf), fmt, args_copy);
     va_end(args_copy);
     if (len > 0 && s_mirror_log_element != NULL) {
-        wifiui_element_send_data(&s_mirror_log_element->common, buf, strlen(buf) + 1);
+        wifiui_element_send_data(&s_mirror_log_element->common, buf, min(len+1, sizeof(buf)));
     }
 
     int ret = s_orig_vprintf(fmt, args);

@@ -510,18 +510,30 @@ void wifiui_start_ssid_scan()
 }
 void wifiui_set_ssid_scan_callback(void (*callback)(void*), void* arg)
 {
+    if(on_scan_completed_callback != NULL){
+        ESP_LOGW(TAG, "scan_callback already exists. wifiui system can only have one scan_callback.");
+        return;
+    }
     on_scan_completed_callback = callback;
     on_scan_completed_callback_arg = arg;
 }
 
 void wifiui_set_ap_connected_callback(void (*callback)(void* arg, uint32_t ip_addr), void* arg)
 {
+    if(on_ap_connected_callback != NULL){
+        ESP_LOGW(TAG, "connected_callback already exists. wifiui system can only have one connected_callback.");
+        return;
+    }
     on_ap_connected_callback = callback;
     on_ap_connected_callback_arg = arg;
 }
 
 void wifiui_set_ap_disconnected_callback(void (*callback)(void* arg, uint8_t reason), void* arg)
 {
+    if(on_ap_disconnected_callback != NULL){
+        ESP_LOGW(TAG, "disconnected_callback already exists. wifiui system can only have one disconnected_callback.");
+        return;
+    }
     on_ap_disconnected_callback = callback;
     on_ap_disconnected_callback_arg = arg;
 }

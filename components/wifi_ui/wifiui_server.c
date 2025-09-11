@@ -41,6 +41,7 @@ static httpd_handle_t start_webserver(void);
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 static esp_err_t page_access_handler(httpd_req_t *req);
 static esp_err_t websocket_handler(httpd_req_t *req);
+static esp_err_t plotly_js_get_handler(httpd_req_t *req);
 static esp_err_t redirect_handler(httpd_req_t *req);
 static esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err); // HTTP Error (404) Handler - Redirects all requests to the root page
 
@@ -196,6 +197,12 @@ httpd_handle_t start_webserver(void)
                 }
             }
         }
+        static const httpd_uri_t plotly_js_uri = {
+            .uri = "/plotly.min.js",
+            .method = HTTP_GET,
+            .handler = plotly_js_get_handler
+        };
+        httpd_register_uri_handler(server, &plotly_js_uri);
         const httpd_uri_t redirect_uri = {
             .uri = "*",
             .method = HTTP_GET,
@@ -382,6 +389,37 @@ esp_err_t websocket_handler(httpd_req_t *req)
         }
         free(buf);
     }
+    return ESP_OK;
+}
+
+esp_err_t plotly_js_get_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "Serve plotly.js");
+    
+    FILE *fp = fopen("/spiffs/plotly.min.js.gz", "rb");
+    if (!fp) {
+        ESP_LOGE(TAG, "File open failed: /spiffs/plotly.min.js.gz");
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
+
+    httpd_resp_set_type(req, "application/javascript");
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+
+    // 1KBずつ送る
+    char buf[1024];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+        esp_err_t r = httpd_resp_send_chunk(req, buf, n);
+        if (r != ESP_OK) {
+            ESP_LOGE(TAG, "send chunk failed: %s", esp_err_to_name(r));
+            fclose(fp);
+            return r;
+        }
+    }
+    fclose(fp);
+    httpd_resp_send_chunk(req, NULL, 0);
+    
     return ESP_OK;
 }
 

@@ -16,6 +16,7 @@ void set_default_common(wifiui_element_t* dst, wifiui_element_type type, create_
     dst->system.on_post_from_this_element = NULL;
     dst->system.use_websocket = false;
     dst->system.on_recv_data = NULL;
+    dst->system.use_plotly = false;
 }
 
 void wifiui_element_send_data(const wifiui_element_t* dst, const char* data, size_t len)

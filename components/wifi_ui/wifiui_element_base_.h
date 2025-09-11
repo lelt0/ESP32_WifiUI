@@ -19,6 +19,7 @@ typedef enum {
     WIFIUI_INPUT,
     WIFIUI_AP_CONNECT_FORM,
     WIFIUI_MESSAGE_LOG,
+    WIFIUI_PLOT,
 } wifiui_element_type;
 
 typedef struct wifiui_element wifiui_element_t;
@@ -32,6 +33,7 @@ struct wifiui_element {
         void (*on_post_from_this_element)(wifiui_element_t*, httpd_req_t*);
         bool use_websocket;
         void (*on_recv_data)(wifiui_element_t* self, const uint8_t* data, size_t len);
+        bool use_plotly;
     } system;
 };
 

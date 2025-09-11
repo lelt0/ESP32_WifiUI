@@ -17,6 +17,7 @@
 #include "wifiui_element_input.h"
 #include "wifiui_element_ap_connect_form.h"
 #include "wifiui_element_message_log.h"
+#include "wifiui_element_plot.h"
 
 static const char *TAG = "sample";
 
@@ -114,9 +115,11 @@ void app_main(void)
 
     
     wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
+    char* series[] = {"signalA", "signalB"};
+    wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_plot("Plot Sample", 2, series, "Value", -10, 10, 30));
 
     
-    dstring_t* html = wifiui_generate_page_html(top_page);
+    dstring_t* html = wifiui_generate_page_html(second_page);
     printf("HTML: %s\n", html->str);
     dstring_free(html);
 

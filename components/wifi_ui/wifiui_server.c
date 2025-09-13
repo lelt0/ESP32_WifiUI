@@ -330,7 +330,6 @@ esp_err_t websocket_handler(httpd_req_t *req)
         bool override = false;
         for(int exist_cli_i = 0; exist_cli_i < MAX_AP_CONN; exist_cli_i++) {
             if (ws_cilents[exist_cli_i].ip_addr.addr == connected_ip_addr.addr) {
-                websoket_close(ws_cilents[exist_cli_i].fd);
                 ws_cilents[exist_cli_i].fd = sock_fd;
                 override = true;
                 ESP_LOGW(TAG, "[WebSocket] Update Websocket of device (" IPSTR ")", IP2STR(&connected_ip_addr));

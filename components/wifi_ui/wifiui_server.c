@@ -155,9 +155,12 @@ httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.task_priority = tskIDLE_PRIORITY+5;
     config.uri_match_fn = httpd_uri_match_wildcard; // "/*" を使う
-    config.max_open_sockets = 13;
-    config.lru_purge_enable = true;
+    config.lru_purge_enable = true; // 古い接続を追い出す
+    config.max_open_sockets = 7;
+    config.recv_wait_timeout = 3;
+    config.send_wait_timeout = 3;
 
     // Start the httpd server
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
@@ -329,7 +332,8 @@ esp_err_t websocket_handler(httpd_req_t *req)
         esp_ip4_addr_t connected_ip_addr = get_client_ip_addr(req, sock_fd);
         bool override = false;
         for(int exist_cli_i = 0; exist_cli_i < MAX_AP_CONN; exist_cli_i++) {
-            if (ws_cilents[exist_cli_i].ip_addr.addr == connected_ip_addr.addr) {
+            if (ws_cilents[exist_cli_i].ip_addr.addr == connected_ip_addr.addr && sock_fd != ws_cilents[exist_cli_i].fd) {
+                httpd_sess_trigger_close(server, ws_cilents[exist_cli_i].fd);
                 ws_cilents[exist_cli_i].fd = sock_fd;
                 override = true;
                 ESP_LOGW(TAG, "[WebSocket] Update Websocket of device (" IPSTR ")", IP2STR(&connected_ip_addr));
@@ -437,6 +441,7 @@ void wifiui_ws_send_data_async(const char* data, size_t len)
             ws_pkt.type = HTTPD_WS_TYPE_BINARY;
             esp_err_t ret = httpd_ws_send_frame_async(server, ws_cilents[cli_i].fd, &ws_pkt);
             if (ret != ESP_OK) {
+                httpd_sess_trigger_close(server, ws_cilents[cli_i].fd);
                 ws_cilents[cli_i].fd = -1;
                 ws_cilents[cli_i].ip_addr.addr = 0;
             }

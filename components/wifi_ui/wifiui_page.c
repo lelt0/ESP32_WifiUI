@@ -178,5 +178,10 @@ function ws_send_with_eid(eid, array) {
     payload.set(array, header.length);
     ws.send(payload);
 }
+window.addEventListener("beforeunload", () => {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.close();
+  }
+});
 </script>
 )";

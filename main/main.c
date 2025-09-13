@@ -7,6 +7,7 @@
 #include "esp_netif.h"
 #include "esp_heap_caps.h"
 #include "esp_system.h"
+#include "math.h"
 
 #include "wifiui_server.h"
 #include "wifiui_element_heading.h"
@@ -17,21 +18,31 @@
 #include "wifiui_element_input.h"
 #include "wifiui_element_ap_connect_form.h"
 #include "wifiui_element_message_log.h"
-#include "wifiui_element_plot.h"
+#include "wifiui_element_timeplot.h"
 
 static const char *TAG = "sample";
 
 const wifiui_element_dtext_t* dtext_time = NULL;
+const wifiui_element_timeplot_t* timeplot = NULL;
 void status_send_task(void *arg) {
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
+        double time = esp_timer_get_time() / 1000000.0;
 
         if(dtext_time != NULL)
         {
-            double time = esp_timer_get_time() / 1000000.0;
             char update_text[64];
             snprintf(update_text, 32, "Boot time: %6.3lfs", time);
             dtext_time->change_text(dtext_time, update_text);
+        }
+
+        if(timeplot != NULL)
+        {
+            float val1 = sin(time) + 0.2 * ((float)rand()/RAND_MAX);
+            float val2 = cos(time*0.5) + 0.2 * ((float)rand()/RAND_MAX);
+            uint64_t time_ms = (uint64_t)time*1000;
+            timeplot->update_plots(timeplot, time_ms, (float[]){val1, val2, NAN});
+            if(((int)time)%2==0) timeplot->update_plot(timeplot, "signalC", time_ms, (float)rand()/RAND_MAX);
         }
     }
 }
@@ -115,13 +126,7 @@ void app_main(void)
 
     
     wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
-    char* series[] = {"signalA", "signalB"};
-    wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_plot("Plot Sample", 2, series, "Value", -10, 10, 30));
-
-    
-    dstring_t* html = wifiui_generate_page_html(second_page);
-    printf("HTML: %s\n", html->str);
-    dstring_free(html);
+    wifiui_add_element(second_page, (const wifiui_element_t*) (timeplot = wifiui_element_timeplot("Plot Sample", 3, (char*[]){"signalA", "signalB", "signalC"}, "Value", -2, 2, 30)));
 
     gpio_reset_pin(LED_GPIO);
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);

@@ -7,8 +7,8 @@ extern "C" {
 #include <stdint.h>
 #include "../wifiui_element_base_.h"
 
-typedef struct wifiui_element_plot wifiui_element_plot_t;
-struct wifiui_element_plot {
+typedef struct wifiui_element_timeplot wifiui_element_timeplot_t;
+struct wifiui_element_timeplot {
     wifiui_element_t common;
     const char* plot_title;
     uint8_t series_count;
@@ -19,11 +19,11 @@ struct wifiui_element_plot {
     float y_min;
     float y_max;
     float time_window_sec;
-    void (*update_plot)(const wifiui_element_plot_t* self, const char* series_name, float value);
-    void (*update_plots)(const wifiui_element_plot_t* self, const float* values);
+    void (*update_plot)(const wifiui_element_timeplot_t* self, const char* series_name, const uint64_t time_ms, float value);
+    void (*update_plots)(const wifiui_element_timeplot_t* self, const uint64_t time_ms, const float* values);
 };
 
-const wifiui_element_plot_t * wifiui_element_plot(
+const wifiui_element_timeplot_t * wifiui_element_timeplot(
     const char* plot_title, uint8_t series_count, char** series_names, 
     const char* y_label, float y_min, float y_max, 
     float time_window_sec);

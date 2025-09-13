@@ -152,11 +152,12 @@ ws.binaryType = 'arraybuffer';
 ws.onmessage = function(evt) {
     var data = new DataView(event.data);
     let eid = data.getUint16(0, true);
-    if (eid in ws_actions) { ws_actions[eid](new Uint8Array(event.data, 2)) }
+    if (eid in ws_actions) { ws_actions[eid](event.data.slice(2)); }
 };
 function cstr2str(array) {
-    const nulIndex = array.indexOf(0);
-    const slice = nulIndex >= 0 ? array.subarray(0, nulIndex) : array;
+    const data = new Uint8Array(array);
+    const nulIndex = data.indexOf(0);
+    const slice = nulIndex >= 0 ? data.subarray(0, nulIndex) : data;
     const text = new TextDecoder("utf-8").decode(slice);
     return text;
 }

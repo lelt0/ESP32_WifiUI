@@ -16,6 +16,7 @@ typedef struct
 } dstring_t;
 
 dstring_t* dstring_create(size_t unit_length);
+dstring_t* dstring_create_json_list(char** strs, size_t strs_count, size_t unit_length);
 size_t dstring_appendf(dstring_t* dst, const char* format, ...);
 void dstring_free(dstring_t* dstr);
 

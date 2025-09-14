@@ -182,7 +182,7 @@ void app_main(void)
 
 
     wifiui_add_element(scatter_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
-    wifiui_add_element(scatter_page, (const wifiui_element_t*) (scatterplot = wifiui_element_scatterplot("Plot Sample", "x", 0, 0, "y", 0, 0)));
+    wifiui_add_element(scatter_page, (const wifiui_element_t*) (scatterplot = wifiui_element_scatterplot("Scatter Sample", "x", 0, 0, "y", 0, 0)));
 
 
     wifiui_add_element(scatter3d_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
@@ -192,7 +192,7 @@ void app_main(void)
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_level(LED_GPIO, led_status);
 
-    wifiui_start(top_page);
+    wifiui_start("", "", top_page);
 
     xTaskCreate(status_send_task, "status_send_task", 4096, NULL, 5, NULL);
 }

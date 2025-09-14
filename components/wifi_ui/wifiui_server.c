@@ -15,7 +15,6 @@
 #include "dns_server.h"
 #include "wifiui_page.h"
 
-#define ESP_AP_PASS ""
 #define MAX_AP_CONN 2
 
 static const char * TAG = "wifiui_server";
@@ -36,7 +35,7 @@ static void * on_ap_connected_callback_arg = NULL;
 static void (*on_ap_disconnected_callback)(void*, uint8_t) = NULL;
 static void * on_ap_disconnected_callback_arg = NULL;
 
-static void wifi_init_softap(void);
+static void wifi_init_softap(const char* ap_ssid, const char* ap_password);
 static httpd_handle_t start_webserver(void);
 
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
@@ -53,7 +52,7 @@ static void websoket_close(int fd);
 static esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst);
 static esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst);
 
-void wifiui_start(const wifiui_page_t* top_page)
+void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_page_t* top_page)
 {
     if(server != NULL){
         ESP_LOGW(TAG, "server already started");
@@ -90,7 +89,7 @@ void wifiui_start(const wifiui_page_t* top_page)
     esp_netif_create_default_wifi_ap();
 
     // Initialise ESP32 in SoftAP mode
-    wifi_init_softap();
+    wifi_init_softap(ap_ssid, ap_password);
 
     // Start the server for the first time
     server = start_webserver();
@@ -100,7 +99,7 @@ void wifiui_start(const wifiui_page_t* top_page)
     start_dns_server(&dns_config);
 }
 
-void wifi_init_softap(void)
+void wifi_init_softap(const char* ap_ssid, const char* ap_password)
 {
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -130,16 +129,24 @@ void wifi_init_softap(void)
     wifi_config_t wifi_config = {
         .ap = {
             //.ssid = ap_ssid,
-            .password = ESP_AP_PASS,
             //.ssid_len = strlen(ap_ssid),
+            //.password = ap_password,
             .authmode = WIFI_AUTH_WPA_WPA2_PSK,
             .max_connection = MAX_AP_CONN
         },
     };
-    create_ssid((char*)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid));
-    wifi_config.ap.ssid_len = strlen((char*)wifi_config.ap.ssid);
-    if (strlen(ESP_AP_PASS) == 0) {
+    if(strlen(ap_ssid)==0) {
+        create_ssid((char*)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid));
+        wifi_config.ap.ssid_len = strlen((char*)wifi_config.ap.ssid);
+    }else{
+        strncpy((char*)wifi_config.ap.ssid, ap_ssid, sizeof(wifi_config.ap.ssid));
+        wifi_config.ap.ssid_len = strlen((char*)wifi_config.ap.ssid);
+    }
+    if (strlen(ap_password) == 0) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+    }else{
+        if(strlen(ap_password) > sizeof(wifi_config.ap.password) - 1) ESP_LOGW(TAG, "AP Password is too long!");
+        strncpy((char*)wifi_config.ap.password, ap_password, sizeof(wifi_config.ap.password));
     }
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
@@ -149,7 +156,7 @@ void wifi_init_softap(void)
     get_current_ap_ip(&ip_info_);
     ESP_LOGI(TAG, "Set up softAP with IP: " IPSTR, IP2STR(&ip_info_.ip));
     ESP_LOGI(TAG, "wifi_init_softap finished. SSID:'%s' password:'%s'",
-             wifi_config.ap.ssid, ESP_AP_PASS);
+             wifi_config.ap.ssid, wifi_config.ap.password);
 }
 
 httpd_handle_t start_webserver(void)

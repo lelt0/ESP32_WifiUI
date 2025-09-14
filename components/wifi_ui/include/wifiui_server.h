@@ -7,7 +7,7 @@ extern "C" {
 #include "../wifiui_page.h"
 #include "esp_wifi.h"
 
-void wifiui_start(const wifiui_page_t* top_page);
+void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_page_t* top_page);
 
 void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_element_t* element_info);
 

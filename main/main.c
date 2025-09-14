@@ -44,6 +44,8 @@ void status_send_task(void *arg) {
             timeplot->update_plots(timeplot, time_ms, (float[]){val1, val2, NAN});
             if(((int)time)%2==0) timeplot->update_plot(timeplot, "signalC", time_ms, (float)rand()/RAND_MAX);
         }
+
+        wifiui_print_server_status();
     }
 }
 

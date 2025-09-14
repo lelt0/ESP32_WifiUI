@@ -10,6 +10,8 @@ static void register_page(wifiui_page_t * page);
 wifiui_page_t * wifiui_create_page(const char * title)
 {
     wifiui_page_t* page = (wifiui_page_t*)malloc(sizeof(wifiui_page_t));
+
+    page->id = pages_count;
     page->title = strdup(title);
     {
         char uri[16];

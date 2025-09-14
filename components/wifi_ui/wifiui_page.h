@@ -9,6 +9,7 @@ extern "C" {
 #include "dstring.h"
 
 typedef struct {
+    uint16_t id;
     const char* title;
     const char* uri;
     const wifiui_element_t ** elements;

@@ -26,7 +26,7 @@ void wifiui_element_send_data(const wifiui_element_t* dst, const char* data, siz
 
     *((wifiui_element_id*)element_data) = dst->id;
     memcpy(element_data + sizeof(wifiui_element_id), data, len);
-    wifiui_ws_send_data_async(element_data, sizeof(wifiui_element_id) + len);
+    wifiui_ws_send_data_async(element_data, sizeof(wifiui_element_id) + len, dst);
     free(element_data);
 }
 

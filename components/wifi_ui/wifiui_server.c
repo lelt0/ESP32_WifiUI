@@ -23,6 +23,7 @@ static const char * TAG = "wifiui_server";
 typedef struct {
     int fd;
     esp_ip4_addr_t ip_addr;
+    const wifiui_page_t* active_page;
 } websocket_client_t;
 static websocket_client_t ws_cilents[MAX_AP_CONN];
 
@@ -59,7 +60,7 @@ void wifiui_start(const wifiui_page_t* top_page)
         return;
     }
 
-    for(int i = 0; i < MAX_AP_CONN; i++){ ws_cilents[i].fd = -1; ws_cilents[i].ip_addr.addr = 0; }
+    for(int i = 0; i < MAX_AP_CONN; i++){ ws_cilents[i].fd = -1; ws_cilents[i].ip_addr.addr = 0; ws_cilents[i].active_page = NULL; }
     top_page_uri = top_page->uri;
 
     mount_spiffs();
@@ -177,7 +178,7 @@ httpd_handle_t start_webserver(void)
                     .uri = page->uri,
                     .method = HTTP_ANY,
                     .handler = page_access_handler,
-                    .user_ctx = NULL,
+                    .user_ctx = page,
                     .is_websocket = false,
                 };
                 httpd_register_uri_handler(server, &page_uri);
@@ -192,7 +193,7 @@ httpd_handle_t start_webserver(void)
                         .uri = uri_ws,
                         .method = HTTP_GET,
                         .handler = websocket_handler,
-                        .user_ctx = NULL,
+                        .user_ctx = page,
                         .is_websocket = true
                     };
                     httpd_register_uri_handler(server, &websocket_uri);
@@ -332,9 +333,10 @@ esp_err_t websocket_handler(httpd_req_t *req)
         esp_ip4_addr_t connected_ip_addr = get_client_ip_addr(req, sock_fd);
         bool override = false;
         for(int exist_cli_i = 0; exist_cli_i < MAX_AP_CONN; exist_cli_i++) {
-            if (ws_cilents[exist_cli_i].ip_addr.addr == connected_ip_addr.addr && sock_fd != ws_cilents[exist_cli_i].fd) {
-                httpd_sess_trigger_close(server, ws_cilents[exist_cli_i].fd);
+            if (ws_cilents[exist_cli_i].ip_addr.addr == connected_ip_addr.addr) {
+                if(sock_fd != ws_cilents[exist_cli_i].fd) httpd_sess_trigger_close(server, ws_cilents[exist_cli_i].fd);
                 ws_cilents[exist_cli_i].fd = sock_fd;
+                ws_cilents[exist_cli_i].active_page = (wifiui_page_t*)req->user_ctx;
                 override = true;
                 ESP_LOGW(TAG, "[WebSocket] Update Websocket of device (" IPSTR ")", IP2STR(&connected_ip_addr));
                 break;
@@ -346,6 +348,7 @@ esp_err_t websocket_handler(httpd_req_t *req)
                 if (ws_cilents[exist_cli_i].fd < 0) {
                     ws_cilents[exist_cli_i].fd = sock_fd;
                     ws_cilents[exist_cli_i].ip_addr = connected_ip_addr;
+                    ws_cilents[exist_cli_i].active_page = (wifiui_page_t*)req->user_ctx;
                     break;
                 }
             }
@@ -426,7 +429,7 @@ esp_err_t plotly_js_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-void wifiui_ws_send_data_async(const char* data, size_t len)
+void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_element_t* element_info)
 {
     if(server == NULL) return;
 
@@ -436,7 +439,19 @@ void wifiui_ws_send_data_async(const char* data, size_t len)
     ws_pkt.len = len;
     for(int cli_i = 0; cli_i < MAX_AP_CONN; cli_i++)
     {
-        if(ws_cilents[cli_i].fd >= 0)
+        // そのelementがあるページがアクティブなクライアントにだけ送信する
+        bool element_is_active = false;
+        if(ws_cilents[cli_i].active_page == NULL) continue;
+        for(int element_i = 0; element_i < ws_cilents[cli_i].active_page->element_count; element_i++)
+        {
+            if(ws_cilents[cli_i].active_page->elements[element_i]->id == element_info->id)
+            {
+                element_is_active = true;
+                break;
+            }
+        }
+
+        if(ws_cilents[cli_i].fd >= 0 && element_is_active)
         {
             ws_pkt.type = HTTPD_WS_TYPE_BINARY;
             esp_err_t ret = httpd_ws_send_frame_async(server, ws_cilents[cli_i].fd, &ws_pkt);
@@ -444,6 +459,7 @@ void wifiui_ws_send_data_async(const char* data, size_t len)
                 httpd_sess_trigger_close(server, ws_cilents[cli_i].fd);
                 ws_cilents[cli_i].fd = -1;
                 ws_cilents[cli_i].ip_addr.addr = 0;
+                ws_cilents[cli_i].active_page = NULL;
             }
         }
     }
@@ -607,7 +623,10 @@ void wifiui_print_server_status()
     int buff_off = 0;
     for(int cli_i = 0; cli_i < MAX_AP_CONN; cli_i++)
     {
-        buff_off += snprintf(buf + buff_off, sizeof(buf) - buff_off, IPSTR "(%d), ", IP2STR(&ws_cilents[cli_i].ip_addr), ws_cilents[cli_i].fd);    
+        buff_off += snprintf(buf + buff_off, sizeof(buf) - buff_off, IPSTR ":%s(%d), ", 
+            IP2STR(&ws_cilents[cli_i].ip_addr), 
+            ((ws_cilents[cli_i].active_page==NULL)? "--" : ws_cilents[cli_i].active_page->uri), 
+            ws_cilents[cli_i].fd);    
     }
     ESP_LOGI(TAG, "websocket clients: %s", buf);
 

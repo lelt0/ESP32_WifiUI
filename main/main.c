@@ -19,11 +19,13 @@
 #include "wifiui_element_ap_connect_form.h"
 #include "wifiui_element_message_log.h"
 #include "wifiui_element_timeplot.h"
+#include "wifiui_element_scatter3d_plot.h"
 
 static const char *TAG = "sample";
 
 const wifiui_element_dtext_t* dtext_time = NULL;
 const wifiui_element_timeplot_t* timeplot = NULL;
+const wifiui_element_scatter3dplot_t* scatter3dplot = NULL;
 void status_send_task(void *arg) {
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -43,6 +45,27 @@ void status_send_task(void *arg) {
             uint64_t time_ms = (uint64_t)time*1000;
             timeplot->update_plots(timeplot, time_ms, (float[]){val1, val2, NAN});
             if(((int)time)%2==0) timeplot->update_plot(timeplot, "signalC", time_ms, (float)rand()/RAND_MAX);
+        }
+
+        if(scatter3dplot != NULL)
+        {
+            uint16_t point_count = rand() % 100;
+            float *x = (float*)malloc(point_count * sizeof(float));
+            float *y = (float*)malloc(point_count * sizeof(float));
+            float *z = (float*)malloc(point_count * sizeof(float));
+            uint32_t *color = (uint32_t*)malloc(point_count * sizeof(uint32_t));
+            for(int i = 0; i < point_count; i++)
+            {
+                x[i] = ((float)rand()/RAND_MAX);
+                y[i] = ((float)rand()/RAND_MAX);
+                z[i] = ((float)rand()/RAND_MAX);
+                color[i] = (uint32_t)(rand()%UINT32_MAX);
+            }
+            scatter3dplot->update_plot(scatter3dplot, point_count, x, y, z, color);
+            free(x);
+            free(y);
+            free(z);
+            free(color);
         }
 
         wifiui_print_server_status();
@@ -105,7 +128,8 @@ void internet_connected(uint32_t ip_addr)
 void app_main(void)
 {
     wifiui_page_t* top_page = wifiui_create_page("WifiUI Sample");
-    wifiui_page_t* second_page = wifiui_create_page("2nd page");
+    wifiui_page_t* timeplot_page = wifiui_create_page("time-plot sample");
+    wifiui_page_t* scatter3d_page = wifiui_create_page("scatter3d-plot sample");
 
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<b>This is WifiUI sample page.</b>\nHello, World!"));
@@ -115,8 +139,9 @@ void app_main(void)
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_led = wifiui_element_dynamic_text("LED status: --")));
 
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Link", 2));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto second page", second_page));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Plot pages", 2));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto time-plot sample page", timeplot_page));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto scatter3d-plot sample page", scatter3d_page));
 
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("AP Connection", 2));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(internet_connected));
@@ -127,8 +152,13 @@ void app_main(void)
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, NULL, true));
 
     
-    wifiui_add_element(second_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
-    wifiui_add_element(second_page, (const wifiui_element_t*) (timeplot = wifiui_element_timeplot("Plot Sample", 3, (char*[]){"signalA", "signalB", "signalC"}, "Value", -2, 2, 30)));
+    wifiui_add_element(timeplot_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
+    wifiui_add_element(timeplot_page, (const wifiui_element_t*) (timeplot = wifiui_element_timeplot("Plot Sample", 3, (char*[]){"signalA", "signalB", "signalC"}, "Value", -2, 2, 30)));
+
+
+    wifiui_add_element(scatter3d_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
+    wifiui_add_element(scatter3d_page, (const wifiui_element_t*) (scatter3dplot = wifiui_element_scatter3d_plot("Plot Sample", 0, 1, 0, 1, 0, 1)));
+
 
     gpio_reset_pin(LED_GPIO);
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);

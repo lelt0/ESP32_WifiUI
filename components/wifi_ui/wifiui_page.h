@@ -14,7 +14,7 @@ typedef struct {
     const char* uri;
     const wifiui_element_t ** elements;
     size_t element_count;
-    bool has_websocket;
+    bool use_websocket;
     bool use_plotly;
 } wifiui_page_t;
 

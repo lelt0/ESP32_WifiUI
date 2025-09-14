@@ -20,7 +20,7 @@ wifiui_page_t * wifiui_create_page(const char * title)
     }    
     page->elements = NULL;
     page->element_count = 0;
-    page->has_websocket = false;
+    page->use_websocket = false;
     page->use_plotly = false;
 
     register_page(page);
@@ -40,7 +40,7 @@ size_t wifiui_add_element(wifiui_page_t* page, const wifiui_element_t* element)
     }
     page->elements[page->element_count++] = element;
 
-    if(element->system.use_websocket || element->system.on_recv_data != NULL) page->has_websocket = true;
+    if(element->system.use_websocket || element->system.on_recv_data != NULL) page->use_websocket = true;
 
     if(element->system.use_plotly) page->use_plotly = true;
 
@@ -101,7 +101,7 @@ dstring_t* wifiui_generate_page_html(const wifiui_page_t* page)
     dstring_t* html = dstring_create(1024);
     
     dstring_appendf(html, html_head_template, page->title);
-    if(page->has_websocket) dstring_appendf(html, "%s", html_websocket_template);
+    if(page->use_websocket) dstring_appendf(html, "%s", html_websocket_template);
     if(page->use_plotly) dstring_appendf(html, "<script src='/plotly.min.js'></script>");
     for(int i = 0; i < page->element_count; i++) {
         wifiui_element_t* element = (wifiui_element_t*)page->elements[i];

@@ -15,7 +15,7 @@ const wifiui_element_timeplot_t * wifiui_element_timeplot(
     float time_window_sec)
 {
     wifiui_element_timeplot_t* self = (wifiui_element_timeplot_t*)malloc(sizeof(wifiui_element_timeplot_t));
-    set_default_common(&self->common, WIFIUI_PLOT, create_partial_html);
+    set_default_common(&self->common, WIFIUI_TIMEPLOT, create_partial_html);
     self->common.system.use_websocket = true;
     self->common.system.use_plotly = true;
 

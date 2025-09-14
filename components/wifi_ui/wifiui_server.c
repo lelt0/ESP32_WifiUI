@@ -183,7 +183,7 @@ httpd_handle_t start_webserver(void)
                 };
                 httpd_register_uri_handler(server, &page_uri);
 
-                if(page->has_websocket)
+                if(page->use_websocket)
                 {
                     size_t uri_len = strlen(page->uri);
                     char * uri_ws = (char*)malloc(uri_len + 3 + 1);

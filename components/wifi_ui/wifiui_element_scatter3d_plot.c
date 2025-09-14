@@ -35,7 +35,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
     wifiui_element_scatter3dplot_t* self_plot = (wifiui_element_scatter3dplot_t*)self;
     dstring_t* html = dstring_create(1024);
     dstring_appendf(html,  
-        "<div id='%s_plot' style='width:100%%; height:100%%;'></div>"
+        "<div id='%s_plot' style='width:100vmin; height:100vmin;'></div>"
         "<script>"
         "{"
             "const plot_id = '%s_plot';"
@@ -83,7 +83,6 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
                     "let zData = [];"
                     "let colorData = [];"
                     "const point_count = Math.floor(array.byteLength / 15);"
-                    "console.log('[yatadebug] point_count: ' + point_count);"
                     "for (let i = 0; i < point_count; i++) {"
                         "let offset = i * 15;"
                         "let x = data.getFloat32(offset, true);"

@@ -20,6 +20,7 @@ typedef enum {
     WIFIUI_AP_CONNECT_FORM,
     WIFIUI_MESSAGE_LOG,
     WIFIUI_TIMEPLOT,
+    WIFIUI_SCATTERPLOT,
     WIFIUI_SCALLTER3D_PLOT
 } wifiui_element_type;
 

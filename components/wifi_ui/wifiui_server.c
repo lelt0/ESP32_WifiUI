@@ -69,9 +69,9 @@ void wifiui_start(const wifiui_page_t* top_page)
         Turn of warnings from HTTP server as redirecting traffic will yield
         lots of invalid requests
     */
-    esp_log_level_set("httpd_uri", ESP_LOG_ERROR);
-    esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
-    esp_log_level_set("httpd_parse", ESP_LOG_ERROR);
+    esp_log_level_set("httpd_uri", ESP_LOG_WARN);
+    esp_log_level_set("httpd_txrx", ESP_LOG_WARN);
+    esp_log_level_set("httpd_parse", ESP_LOG_WARN);
 
     // Initialize NVS needed by Wi-Fi
     ESP_ERROR_CHECK(nvs_flash_init());
@@ -162,6 +162,9 @@ httpd_handle_t start_webserver(void)
     config.max_open_sockets = 7;
     config.recv_wait_timeout = 3;
     config.send_wait_timeout = 3;
+    uint16_t page_count = 0;
+    wifiui_page_t** pages = wifiui_get_pages(&page_count);
+    config.max_uri_handlers = page_count * 2 + 2;
 
     // Start the httpd server
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
@@ -169,8 +172,6 @@ httpd_handle_t start_webserver(void)
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
         {
-            uint16_t page_count = 0;
-            wifiui_page_t** pages = wifiui_get_pages(&page_count);
             for(int page_i = 0; page_i < page_count; page_i++)
             {
                 wifiui_page_t* page = pages[page_i];

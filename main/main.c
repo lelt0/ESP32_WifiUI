@@ -24,6 +24,9 @@
 
 static const char *TAG = "sample";
 
+/* Interval task */
+// change Dynamic Text sample
+// update Plots (Time Plot, Scatter Plot, and 3D Scatter Plot) sample
 const wifiui_element_dtext_t* dtext_time = NULL;
 const wifiui_element_timeplot_t* timeplot = NULL;
 const wifiui_element_scatterplot_t* scatterplot = NULL;
@@ -90,11 +93,10 @@ void status_send_task(void *arg) {
                 free(color);
             }
         }
-
-        wifiui_print_server_status();
     }
 }
 
+/* Button click callback */
 #define LED_GPIO 19
 static bool led_status = true;
 const wifiui_element_dtext_t* dtext_led = NULL;
@@ -112,6 +114,7 @@ void toggle_led(const wifiui_element_button_t * dummy, void* arg)
     }
 }
 
+/* Text input callback */
 const wifiui_element_msglog_t* msglog = NULL;
 void input_callback(char* str, void* param)
 {
@@ -126,17 +129,25 @@ void input_callback(char* str, void* param)
     if(strcmp(str, "mem") == 0)
     {
         // print free memory
+        ESP_LOGI(TAG, "");
+        ESP_LOGI(TAG, "=== memory info ===");
         UBaseType_t high_water_mark = uxTaskGetStackHighWaterMark(NULL);
-        ESP_LOGI(TAG, "Stack high water mark: %u words", (unsigned int)high_water_mark);
+        ESP_LOGI(TAG, "Stack high water mark  : %u words", (unsigned int)high_water_mark);
         size_t free_heap = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
         size_t min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
-        ESP_LOGI(TAG, "Current free heap: %u bytes", (unsigned int)free_heap);
-        ESP_LOGI(TAG, "Minimum free heap ever: %u bytes", (unsigned int)min_free_heap);
+        ESP_LOGI(TAG, "Current free heap      : %u bytes", (unsigned int)free_heap);
+        ESP_LOGI(TAG, "Minimum free heap ever : %u bytes", (unsigned int)min_free_heap);
+        ESP_LOGI(TAG, "===================");
+        ESP_LOGI(TAG, "");
     }
     else if(strcmp(str, "server") == 0)
     {
         // print server status
+        ESP_LOGI(TAG, "");
+        ESP_LOGI(TAG, "=== server info ===");
         wifiui_print_server_status();
+        ESP_LOGI(TAG, "===================");
+        ESP_LOGI(TAG, "");
     }
 }
 
@@ -155,36 +166,41 @@ void app_main(void)
     wifiui_page_t* scatter_page = wifiui_create_page("scatter-plot sample");
     wifiui_page_t* scatter3d_page = wifiui_create_page("scatter3d-plot sample");
 
+    /* Static & Dynamic text sample */
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<b>This is WifiUI sample page.</b>\nHello, World!"));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_time = wifiui_element_dynamic_text("Boot time: --")));
 
+    /* Button control sample */
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Button Control", 2));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_led = wifiui_element_dynamic_text("LED status: --")));
 
+    /* Message log & Text input sample */
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Mirror Console", 2));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (msglog = wifiui_element_message_log(true)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, NULL, true));
+
+    /* Access Point (AP) connection sample  */
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("AP Connection", 2));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(internet_connected));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_staip = wifiui_element_dynamic_text("current IP as STA: --")));
+
+    /* 2D & 3D Plot links  */
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Plot pages", 2));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto time-plot sample page", timeplot_page));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto scatter-plot sample page", scatter_page));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto scatter3D-plot sample page", scatter3d_page));
 
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("AP Connection", 2));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(internet_connected));
-    wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_staip = wifiui_element_dynamic_text("current IP as STA: --")));
-
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Mirror Console", 2));
-    wifiui_add_element(top_page, (const wifiui_element_t*) (msglog = wifiui_element_message_log(true)));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, NULL, true));
-
-    
+    /* Time Plot sample */
     wifiui_add_element(timeplot_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
     wifiui_add_element(timeplot_page, (const wifiui_element_t*) (timeplot = wifiui_element_timeplot("Plot Sample", 3, (char*[]){"signalA", "signalB", "signalC"}, "Value", -2, 2, 30)));
 
-
+    /* Scatter (X-Y) Plot sample */
     wifiui_add_element(scatter_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
     wifiui_add_element(scatter_page, (const wifiui_element_t*) (scatterplot = wifiui_element_scatterplot("Scatter Sample", "x", 0, 0, "y", 0, 0)));
 
-
+    /* 3D Scatter Plot sample */
     wifiui_add_element(scatter3d_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
     wifiui_add_element(scatter3d_page, (const wifiui_element_t*) (scatter3dplot = wifiui_element_scatter3d_plot("Plot Sample", 0, 1, 0, 1, 0, 1)));
 
@@ -192,7 +208,9 @@ void app_main(void)
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_level(LED_GPIO, led_status);
 
+    /* Start WifiUI */
     wifiui_start("", "", top_page);
 
+    // create interval task
     xTaskCreate(status_send_task, "status_send_task", 4096, NULL, 5, NULL);
 }

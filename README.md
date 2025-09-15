@@ -1,13 +1,46 @@
 # WifiUIとは？
 
-Wifi経由で開けるESP32のブラウザUIをそう呼ぶことにする
-- ESP32の公開アクセスポイント（SSID: `esp32-<MACアドレス下6桁>`）にスマホやPCを接続することでブラウザでUIが自動で開く
-- このUIによって、物理的な配線なしにインタラクティブな対ESP32 GUIを提供する
+Wifi経由で開けるESP32のGUI
+- ESP32のアクセスポイントにスマホやPCを接続することでブラウザでUIにアクセス可能  
+つまり物理的な配線なしでインタラクティブなESP32 GUIを提供する
 - さらにESP32を子機としてインターネットに接続し、ルーティングを適切に設定すれば、ネット経由でそのUIにアクセスすることも可能
 
 <img src="doc/res/Screenshot_20250828_005012_Captive Portal Login.jpg" width="200">
 
+## 機能紹介
 
+[!['YoutubeにあるWifiUIデモ動画'](doc\res\wifiui_demo_thumbnail.jpg)](https://youtu.be/zH2t_q2wEK8)
+
+動画では以下の要素を紹介しています。  
+- 静的テキスト  
+- 動的テキスト
+- ボタン（例としてLEDのON/OFF）
+- メッセージログ
+- テキスト入力
+- STAモードでのルータ接続フォーム
+- 動的グラフ
+    - 時系列グラフ
+    - 散布図（X-Yグラフ）
+    - 3D散布図
+
+## スマホ/PC等からのUI起動方法
+
+1. WifiUIをFlashしたESP32を起動する
+1. クライアントになる端末（Wifi機能を備えたPCやスマホ）で「利用可能なWifiネットワーク」などから **esp32-XXXXXX**（XXXXXXはESP32のMACアドレス下6桁）もしくは指定されたSSIDに接続する  
+    <img src="doc/res/image-8.png" width="100">
+1. 同じページや通知に現れる「ネットワークにサインイン」を選択  
+    機種によってはこの操作は不要なこともある。（iOSやWindowsは不要だった）  
+    <img src="doc/res/image-9.png" width="100">
+    <img src="doc/res/image-10.png" width="100">
+1. OS内蔵ブラウザでUIが立ち上がる  
+    <img src="doc/res/Screenshot_20250828_005012_Captive Portal Login.jpg" width="100">
+
+## TODO
+- 複数NICを持ちすでにインターネットに接続したクライアント端末でのUIへのアクセス方法
+- 複数クライアント接続対応
+- element構造体のconst指定
+
+# デベロッパーマニュアル
 ## 開発環境
 - VS Code
     - ESP-IDF V5.4.1 Extension (詳細はRADECHのドキュメント、もしくは[ESP32S3_helloworld](https://github.com/lelt0/ESP32S3_helloworld)を参照)    
@@ -18,15 +51,165 @@ Wifi経由で開けるESP32のブラウザUIをそう呼ぶことにする
 - ESP32
     無印もしくはS3で動作確認
 
-## TODO
-- 入力テキストボックスでCtrl+Enterで送信
-- HTML作成時の可変長文字列
-- リロードしたらアクセスができなくなる問題
-- 複数NICを持ちすでにインターネットに接続したクライアント端末でのUIへのアクセス方法
-- 複数クライアント接続したら接続できないことがある問題
-- 時系列グラフ実装
+## UIの作成方法
+サンプルの実装は`main/main.c`を参照。  
 
-# Get Started
+UIは複数のページ（page）とそのページ内に配置される要素（element）からなる。  
+<img src=doc/res/image-12.png width=500>
+
+1. ページ（page）の作成  
+    `wifiui_create_page()`でページを作成しpage構造体ポインタを取得
+    ```c
+    #include "wifiui_server.h"
+    wifiui_page_t* page = wifiui_create_page("This is Page title");
+    ```
+1. 要素（element）の作成  
+    1. `wifiui_element_button()`などの関数でelement構造体ポインタを取得  
+    （各element詳細は[element一覧](#element一覧)を参照）  
+    1. `wifiui_add_element()`でelementをpageに登録  
+    ```c
+    #include "wifiui_element_button.h"
+    wifiui_add_element(page, (const wifiui_element_t*) wifiui_element_button("button text", click_callback, click_callback_param));
+    ```
+1. WifiUIの開始
+    `wifiui_start()`でUIを開始。このときアクセスポイントのSSIDとパスワード、そしてトップページとなるpageを指定する。
+    ```c
+    wifiui_start("ssid", "password", top_page);
+    ```
+
+### element一覧
+#### 見出し
+H1～H6の見出しを表示する
+```c
+#include "wifiui_element_heading.h"
+wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1));
+```
+![alt text](doc/res/image-17.png)
+
+#### 静的テキスト  
+固定テキストを表示する  
+- HTMLタグが使用可能  
+```c
+#include "wifiui_element_stext.h"
+wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<b>This is WifiUI sample page.</b>\nHello, World!"));
+```
+![alt text](doc/res/image-11.png)
+
+#### 動的テキスト
+動的に内容を変更できるテキストを表示する
+```c
+#include "wifiui_element_dtext.h"
+const wifiui_element_dtext_t* dtext_time = NULL;
+wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_time = wifiui_element_dynamic_text("Boot time: --")));
+
+if(dtext_time != NULL)
+{
+    char update_text[64];
+    snprintf(update_text, 32, "Boot time: %6.3lfs", time);
+    dtext_time->change_text(dtext_time, update_text);
+}
+```
+![alt text](doc/res/image-13.png)
+
+#### ボタン
+クリック可能なボタンを配置する
+```c
+#include "wifiui_element_button.h"
+
+void click_callback(const wifiui_element_button_t * dummy, void* arg){ ... }
+wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", click_callback, NULL));
+```
+![alt text](doc/res/image-14.png)
+
+#### リンク
+ほかのpageにアクセスするリンクテキストを配置する
+```c
+#include "wifiui_element_link.h"
+wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto time-plot sample page", timeplot_page));
+```
+![alt text](doc/res/image-15.png)
+
+#### メッセージログ
+ESPから送信されるメッセージの受信ログを配置する
+- オプションとして`ESP_LOG()`系マクロのコピーログを作成することができる
+```c
+#include "wifiui_element_message_log.h"
+const wifiui_element_msglog_t* msglog = NULL;
+wifiui_add_element(top_page, (const wifiui_element_t*) (msglog = wifiui_element_message_log(true)));
+
+if(msglog != NULL) msglog->print_message(msglog, "INPUT: aaa");
+```
+![alt text](doc/res/image-16.png)
+
+#### テキスト入力
+複数行テキストを入力しESPに送信するフォームを作成する
+- 送信はボタンクリックのほかにCtrl+Enterでも可能
+```c
+#include "wifiui_element_input.h"
+void input_callback(char* str, void* param){ ... }
+wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, NULL, true));
+```
+![alt text](doc/res/image-18.png)
+
+#### STAモードでのルータ接続フォーム
+ESPがクライアントとしてルータなどに接続するためのSSID・パスワード入力フォームを配置する
+- 「Scan available SSID」ボタンで利用可能なSSIDをスキャン可能
+```c
+#include "wifiui_element_ap_connect_form.h"
+void connected_callback(uint32_t ip_addr){ ... }
+wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(connected_callback));
+```
+![alt text](doc/res/image-19.png)
+
+#### 時系列グラフ
+リアルタイムで更新される時系列グラフを配置する
+- 横軸の時間スケールを指定可能
+- 縦軸のスケールを指定可能（自動スケールも利用可能）
+```c
+#include "wifiui_element_timeplot.h"
+#include "math.h"
+const wifiui_element_timeplot_t* timeplot = NULL;
+wifiui_add_element(timeplot_page, (const wifiui_element_t*) (timeplot = wifiui_element_timeplot("Plot Sample", 3, (char*[]){"signalA", "signalB", "signalC"}, "Value", -2, 2, 30)));
+
+// 全signal更新（NAN指定で更新から除外）
+timeplot->update_plots(timeplot, time_ms, (float[]){val1, val2, NAN});
+// signal名を指定して更新
+timeplot->update_plot(timeplot, "signalC", time_ms, val3);
+```
+<img src='doc/res/image-20.png' width='30%'>
+
+#### 散布図（X-Yグラフ）
+リアルタイムで更新可能なX-Yグラフを配置する
+- 複数データの描画に対応
+- 点間に線を描画するかをデータごとにオプションで指定可能
+```c
+#include "wifiui_element_scatterplot.h"
+const wifiui_element_scatterplot_t* scatterplot = NULL;
+wifiui_add_element(scatter_page, (const wifiui_element_t*) (scatterplot = wifiui_element_scatterplot("Scatter Sample", "x", 0, 0, "y", 0, 0)));
+
+if(scatterplot != NULL)
+{
+    ...
+    scatterplot->add_plot(scatterplot, "sample-1", point_count, x, y, true);
+}
+```
+<img src='doc/res/image-21.png' width='20%'>
+
+#### 3D散布図
+リアルタイムで更新可能な3D散布図を配置する（試験実装）
+- (x, y, z)とcolorを指定可能
+```c
+#include "wifiui_element_scatter3d_plot.h"
+const wifiui_element_scatter3dplot_t* scatter3dplot = NULL;
+wifiui_add_element(scatter3d_page, (const wifiui_element_t*) (scatter3dplot = wifiui_element_scatter3d_plot("Plot Sample", 0, 1, 0, 1, 0, 1)));
+
+if(scatter3dplot != NULL)
+{
+    ...
+    scatter3dplot->update_plot(scatter3dplot, point_count, x, y, z, color);
+}
+```
+<img src='doc/res/image-22.png' width='20%'>
 
 ## ビルド方法
 
@@ -40,17 +223,6 @@ Wifi経由で開けるESP32のブラウザUIをそう呼ぶことにする
     - 特に最初のビルドでは、プロジェクトルートのCMakeLists.txtで、`FLASH_IN_PROJECT`を有効にする
 1. 普通にビルド＆Flash（`idf.py build flash`）
 
-## 使い方
-
-1. FlashしたESP32を起動する
-1. クライアントになる端末（Wifi機能を備えたPCやスマホ）で「利用可能なWifiネットワーク」などから **esp32-XXXXXX**（XXXXXXはESP32のMACアドレス下6桁）に接続する  
-    <img src="doc/res/image-8.png" width="100">
-1. 同じページや通知に現れる「ネットワークにサインイン」を選択  
-    機種によってはこの操作は不要なこともある。（iOSやWindowsは不要だった）  
-    <img src="doc/res/image-9.png" width="100">
-    <img src="doc/res/image-10.png" width="100">
-1. OS内蔵ブラウザでUIが立ち上がる  
-    <img src="doc/res/Screenshot_20250828_005012_Captive Portal Login.jpg" width="100">
 
 # 内部仕様
 

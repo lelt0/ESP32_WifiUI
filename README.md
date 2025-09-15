@@ -9,7 +9,7 @@ Wifi経由で開けるESP32のGUI
 
 ## 機能紹介
 
-[!['YoutubeにあるWifiUIデモ動画'](doc\res\wifiui_demo_thumbnail.jpg)](https://youtu.be/zH2t_q2wEK8)
+[![YoutubeにあるWifiUIデモ動画](./doc/res/wifiui_demo_thumbnail.jpg)](https://youtu.be/zH2t_q2wEK8)
 
 動画では以下の要素を紹介しています。  
 - 静的テキスト  

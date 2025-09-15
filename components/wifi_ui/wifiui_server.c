@@ -108,11 +108,9 @@ void wifi_init_softap(const char* ap_ssid, const char* ap_password)
     esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
     esp_netif_dhcps_stop(netif);
     {
-        // AP IP を 4.3.2.1 に設定
+        // AP IP を 198.18.0.1 に設定（RFC 2544で定義されたベンチマーク用アドレスのため、一般的なPublicIPとの衝突はないはず）
         esp_netif_ip_info_t ip_info;
         esp_netif_get_ip_info(netif, &ip_info);
-        // IP4_ADDR(&ip_info.ip, 4, 3, 2, 1);
-        // IP4_ADDR(&ip_info.gw, 4, 3, 2, 1);
         IP4_ADDR(&ip_info.ip, 198, 18, 0, 1);
         IP4_ADDR(&ip_info.gw, 198, 18, 0, 1);
         IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);

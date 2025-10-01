@@ -73,7 +73,12 @@ void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_pag
     esp_log_level_set("httpd_parse", ESP_LOG_WARN);
 
     // Initialize NVS needed by Wi-Fi
-    ESP_ERROR_CHECK(nvs_flash_init());
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        // フラッシュを消去してから再初期化
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
 
     // Initialize networking stack
     ESP_ERROR_CHECK(esp_netif_init());
@@ -640,3 +645,4 @@ void wifiui_print_server_status()
     get_current_sta_ip(&sta_ip);
     ESP_LOGI(TAG, "sta:: ip: " IPSTR, IP2STR(&sta_ip.ip));
 }
+

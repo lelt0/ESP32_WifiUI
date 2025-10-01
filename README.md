@@ -84,7 +84,7 @@ H1～H6の見出しを表示する
 #include "wifiui_element_heading.h"
 wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1));
 ```
-![alt text](doc/res/image-17.png)
+> ![alt text](doc/res/image-17.png)
 
 #### 静的テキスト  
 固定テキストを表示する  
@@ -93,7 +93,7 @@ wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("W
 #include "wifiui_element_stext.h"
 wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<b>This is WifiUI sample page.</b>\nHello, World!"));
 ```
-![alt text](doc/res/image-11.png)
+> ![alt text](doc/res/image-11.png)
 
 #### 動的テキスト
 動的に内容を変更できるテキストを表示する
@@ -109,7 +109,7 @@ if(dtext_time != NULL)
     dtext_time->change_text(dtext_time, update_text);
 }
 ```
-![alt text](doc/res/image-13.png)
+> ![alt text](doc/res/image-13.png)
 
 #### ボタン
 クリック可能なボタンを配置する
@@ -119,7 +119,7 @@ if(dtext_time != NULL)
 void click_callback(const wifiui_element_button_t * dummy, void* arg){ ... }
 wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", click_callback, NULL));
 ```
-![alt text](doc/res/image-14.png)
+> ![alt text](doc/res/image-14.png)
 
 #### リンク
 ほかのpageにアクセスするリンクテキストを配置する
@@ -127,7 +127,7 @@ wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("To
 #include "wifiui_element_link.h"
 wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto time-plot sample page", timeplot_page));
 ```
-![alt text](doc/res/image-15.png)
+> ![alt text](doc/res/image-15.png)
 
 #### メッセージログ
 ESPから送信されるメッセージの受信ログを配置する
@@ -139,7 +139,7 @@ wifiui_add_element(top_page, (const wifiui_element_t*) (msglog = wifiui_element_
 
 if(msglog != NULL) msglog->print_message(msglog, "INPUT: aaa");
 ```
-![alt text](doc/res/image-16.png)
+> ![alt text](doc/res/image-16.png)
 
 #### テキスト入力
 複数行テキストを入力しESPに送信するフォームを作成する
@@ -149,7 +149,7 @@ if(msglog != NULL) msglog->print_message(msglog, "INPUT: aaa");
 void input_callback(char* str, void* param){ ... }
 wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, NULL, true));
 ```
-![alt text](doc/res/image-18.png)
+> ![alt text](doc/res/image-18.png)
 
 #### STAモードでのルータ接続フォーム
 ESPがクライアントとしてルータなどに接続するためのSSID・パスワード入力フォームを配置する
@@ -159,7 +159,7 @@ ESPがクライアントとしてルータなどに接続するためのSSID・�
 void connected_callback(uint32_t ip_addr){ ... }
 wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(connected_callback));
 ```
-![alt text](doc/res/image-19.png)
+> ![alt text](doc/res/image-19.png)
 
 #### 時系列グラフ
 リアルタイムで更新される時系列グラフを配置する
@@ -176,7 +176,7 @@ timeplot->update_plots(timeplot, time_ms, (float[]){val1, val2, NAN});
 // signal名を指定して更新
 timeplot->update_plot(timeplot, "signalC", time_ms, val3);
 ```
-<img src='doc/res/image-20.png' width='30%'>
+> <img src='doc/res/image-20.png' width='30%'>
 
 #### 散布図（X-Yグラフ）
 リアルタイムで更新可能なX-Yグラフを配置する
@@ -193,7 +193,7 @@ if(scatterplot != NULL)
     scatterplot->add_plot(scatterplot, "sample-1", point_count, x, y, true);
 }
 ```
-<img src='doc/res/image-21.png' width='20%'>
+> <img src='doc/res/image-21.png' width='20%'>
 
 #### 3D散布図
 リアルタイムで更新可能な3D散布図を配置する（試験実装）
@@ -209,7 +209,7 @@ if(scatter3dplot != NULL)
     scatter3dplot->update_plot(scatter3dplot, point_count, x, y, z, color);
 }
 ```
-<img src='doc/res/image-22.png' width='20%'>
+> <img src='doc/res/image-22.png' width='20%'>
 
 ## ビルド方法
 
@@ -578,4 +578,5 @@ WifiUIではESPログをWebSocket通信でブラウザにも流したかった�
 1. buildフォルダを手動で削除
 1. `idf.py fullclean`
 1. `idf.py build`
+
 

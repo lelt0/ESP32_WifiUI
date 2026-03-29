@@ -2,10 +2,11 @@
 // Axis
 // =========================
 class Axis {
-  constructor(name, min = -10, max = 10, drawAt = "lowest") {
+  constructor(name, min = -10, max = 10, tickLength = 6, drawAt = "lowest") {
     this.name = name;
     this.min = min;
     this.max = max;
+    this.tickLength = tickLength; // if < 0, that means full length
     this.drawAt = drawAt; // "lowest" or "highest" or AxisObject (means this Axis is drawn at '0' of AxisObject)
   }
 
@@ -63,8 +64,8 @@ class Graph2D {
     this.ctx = canvas.getContext("2d");
 
     this.viewHeightRatio = heightRatio;
-    this.xAxes = [new Axis("X0", xRange[0], xRange[1])];
-    this.yAxes = [new Axis("Y0", yRange[0], yRange[1])];
+    this.xAxes = [new Axis("X0", xRange[0], xRange[1], -1)];
+    this.yAxes = [new Axis("Y0", yRange[0], yRange[1], -1)];
     this.xAxes[0].drawAt = this.yAxes[0];
     this.yAxes[0].drawAt = this.xAxes[0];
 
@@ -74,12 +75,29 @@ class Graph2D {
     window.addEventListener("resize", () => this.resize());
   }
 
+  addXAxis(name, min, max, tickLength = undefined, drawAt = undefined) {
+    const a = new Axis(name, min, max, tickLength, drawAt);
+    this.xAxes.push(a);
+    return a;
+  }
+
+  addYAxis(name, min, max, tickLength = undefined, drawAt = undefined) {
+    const a = new Axis(name, min, max, tickLength, drawAt);
+    this.yAxes.push(a);
+    return a;
+  }
+
   getSeries(name) {
     return this.seriesList.find(s => s.name === name);
   }
 
-  addSeries(series) {
-    this.seriesList.push(series);
+  addSeries(name, color, x = null, y = null, drawPoints = true, drawLine = true, xAxis = this.xAxes[0], yAxis = this.yAxes[0]) {
+    const s = new DataSeries2D(name, color, xAxis, yAxis, drawPoints, drawLine);
+    if (!y) y = [];
+    if (!x) x = [...Array(y.length).keys()];
+    s.setData(x, y);
+    this.seriesList.push(s);
+    return s;
   }
 
   // 高DPI対応リサイズ
@@ -95,7 +113,7 @@ class Graph2D {
     this.render();
   }
 
-  toScreen(x, y, xAxis = null, yAxis = null) {
+  toScreen(x, y, xAxis = undefined, yAxis = undefined) {
     let sx = x;
     if (xAxis) {
       const w = this.canvas.width / (window.devicePixelRatio || 1);
@@ -118,7 +136,7 @@ class Graph2D {
   }
 
   // TODO: データ数が多くなったら連続描画（polyline）を検討 
-  drawLine(x1, y1, x2, y2, xAxis = null, yAxis = null, color = "#888", width = 1) {
+  drawLine(x1, y1, x2, y2, xAxis = undefined, yAxis = undefined, color = "#888", width = 1) {
     const [sx1, sy1] = this.toScreen(x1, y1, xAxis, yAxis);
     const [sx2, sy2] = this.toScreen(x2, y2, xAxis, yAxis);
 
@@ -130,7 +148,7 @@ class Graph2D {
     this.ctx.stroke();
   }
 
-  drawPoint(x, y, xAxis = null, yAxis = null, r = 4, color = "red") {
+  drawPoint(x, y, xAxis = undefined, yAxis = undefined, r = 4, color = "red") {
     const [sx, sy] = this.toScreen(x, y, xAxis, yAxis);
 
     this.ctx.beginPath();
@@ -189,14 +207,18 @@ class Graph2D {
     // 目盛り線
     for (let i = 0; i < xAxes_ticks_sx.length; i++) {
         const sy = xAxes_sy[i];
+        const tickLength = this.xAxes[i].tickLength;
+        const [y0, y1] = (tickLength < 0 ? [0, h] : [sy - tickLength, sy + tickLength]);
         for (const sx of xAxes_ticks_sx[i]) {
-          this.drawLine(sx, 0, sx, h, null, null, "#ccc", 1);
+          this.drawLine(sx, y0, sx, y1, null, null, "#ccc", 1);
         }
     }
     for (let i = 0; i < yAxes_ticks_sy.length; i++) {
         const sx = yAxes_sx[i];
+        const tickLength = this.yAxes[i].tickLength;
+        const [x0, x1] = (tickLength < 0 ? [0, w] : [sx - tickLength, sx + tickLength])
         for (const sy of yAxes_ticks_sy[i]) {
-          this.drawLine(0, sy, w, sy, null, null, "#ccc", 1);
+          this.drawLine(x0, sy, x1, sy, null, null, "#ccc", 1);
         }
     }
 
@@ -269,7 +291,7 @@ class Graph2D {
     let s = this.getSeries(name);
     if (!s) {
       s = new DataSeries2D(name, "red", this.xAxes[0], this.yAxes[0], true, true);
-      this.addSeries(s);
+      this.seriesList.push(s);
     }
     s.addData(x, y);
   }

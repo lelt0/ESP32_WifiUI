@@ -50,7 +50,8 @@ canvas { display: block;
 // =========================
 const canvas = document.getElementById("graph");
 const graph = new Graph2D(canvas, heightRatio=0.8);
-graph.xAxes.push(new Axis("X1", 5, 15, "highest"));
+const axis_2nd = graph.addXAxis("X1", -1.6, 8.6, undefined, "highest");
+graph.addSeries("dummy", "blue", null, [0,0.5,0.75], undefined, undefined, axis_2nd);
 graph.render();
 
 function random(min, max) {

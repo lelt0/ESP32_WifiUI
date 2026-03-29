@@ -291,6 +291,46 @@ class Graph2D {
     }
   }
 
+  drawLegend() {
+    // 凡例描画
+    const ctx = this.ctx;
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.canvas.width / dpr;
+    const h = this.canvas.height / dpr;
+
+    ctx.font = "16px sans-serif";
+    const padding = 6;
+    const fontSize = 16;
+    const lineHeight = fontSize * 1.2;
+
+    // 最大文字幅取得
+    let maxWidth = 0;
+    for (const s of this.seriesList) {
+      const m = ctx.measureText(s.name).width;
+      if (m > maxWidth) maxWidth = m;
+    }
+
+    // 枠サイズ
+    const boxW = maxWidth + padding * 2;
+    const boxH = this.seriesList.length * lineHeight + padding * 2;
+
+    // 右下配置
+    const x0 = w - boxW - 20;
+    const y0 = h - boxH - 20;
+
+    // 背景
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.fillRect(x0, y0, boxW, boxH);
+
+    // テキスト
+    for (let i = 0; i < this.seriesList.length; i++) {
+      const s = this.seriesList[i];
+      ctx.fillStyle = s.color;
+      const ty = y0 + padding + i * lineHeight + lineHeight / 2;
+      ctx.fillText(s.name, x0 + padding, ty);
+    }
+  }
+
   addData(name, x, y) {
     let s = this.getSeries(name);
     if (!s) {
@@ -321,5 +361,7 @@ class Graph2D {
         }
       }
     }
+
+    this.drawLegend();
   }
 }

@@ -161,7 +161,7 @@ class Graph2D {
     this.ctx.fill();
   }
 
-  drawAxes() {
+  drawAxes(drawAxisName = true) {
     const ctx = this.ctx;
     const dpr = window.devicePixelRatio || 1;
     const w = this.canvas.width / dpr;
@@ -213,35 +213,48 @@ class Graph2D {
         const sy = xAxes_sy[i];
         const tickLength = this.xAxes[i].tickLength;
         const [y0, y1] = (tickLength < 0 ? [0, h] : [sy - tickLength, sy + tickLength]);
-        for (const sx of xAxes_ticks_sx[i]) {
-          this.drawLine(sx, y0, sx, y1, null, null, "#ccc", 1);
-        }
+        for (const sx of xAxes_ticks_sx[i]) this.drawLine(sx, y0, sx, y1, null, null, "#ccc", 1);
     }
     for (let i = 0; i < yAxes_ticks_sy.length; i++) {
         const sx = yAxes_sx[i];
         const tickLength = this.yAxes[i].tickLength;
         const [x0, x1] = (tickLength < 0 ? [0, w] : [sx - tickLength, sx + tickLength])
-        for (const sy of yAxes_ticks_sy[i]) {
-          this.drawLine(x0, sy, x1, sy, null, null, "#ccc", 1);
-        }
+        for (const sy of yAxes_ticks_sy[i]) this.drawLine(x0, sy, x1, sy, null, null, "#ccc", 1);
     }
 
     // 軸
     for (const sy of xAxes_sy) this.drawLine(0, sy, w, sy, null, null, "#888", 2);
     for (const sx of yAxes_sx) this.drawLine(sx, 0, sx, h, null, null, "#888", 2);
 
-    // 目盛りラベル
-    const X_TICK_LABEL_MARGIN = 10
+    // ラベル
+    ctx.fillStyle = "#444";
+    const X_TICK_LABEL_MARGIN = 5;
     for (let i = 0; i < xAxes_sy.length; i++) {
+        const xAxis = this.xAxes[i];
         const sy = xAxes_sy[i];
+        const label_sy = (sy < h / 2 ? sy + 6 : sy - 6);
+        ctx.textBaseline = (sy < h / 2 ? "top" : "bottom");
+        
+        // 軸ラベル
+        let AxisNameXmin = w;
+        if ( drawAxisName ) {
+            ctx.font = "bold 12px sans-serif";
+            ctx.textAlign = "left";
+            AxisNameXmin = w - (5 + ctx.measureText(xAxis.name).width + 5);
+            ctx.fillText(xAxis.name, AxisNameXmin + 5, label_sy);
+        }
+
+        // 目盛りラベル
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
         for (let j = 0; j < xAxes_ticks[i].length; j++) {
             const t = xAxes_ticks[i][j];
             const sx = xAxes_ticks_sx[i][j];
 
-            // 端すぎたりY軸と被るラベルは描画しない
+            // 端すぎたり、Y軸や軸ラベルと被る目盛りラベルは描画しない
             let skip = false;
             if (sx < X_TICK_LABEL_MARGIN) continue;
-            if (sx > w - X_TICK_LABEL_MARGIN) continue;
+            if (sx > AxisNameXmin - X_TICK_LABEL_MARGIN) continue;
             for (const yaxis_sx of yAxes_sx) {
               if (sx >= yaxis_sx - X_TICK_LABEL_MARGIN && sx <= yaxis_sx + X_TICK_LABEL_MARGIN) { skip = true; break; }
             }
@@ -249,28 +262,36 @@ class Graph2D {
 
             let t_ = Number(t.toFixed(12));
             let label = t_.toString(); if (label.length >= 7) label = t_.toExponential(2);
-            ctx.fillStyle = "#444";
-            ctx.font = "12px sans-serif";
-            ctx.textAlign = "center";
-            if (sy < h / 2) {
-              ctx.textBaseline = "top";
-              ctx.fillText(label, sx, sy + 6);
-            } else {
-              ctx.textBaseline = "bottom";
-              ctx.fillText(label, sx, sy - 6);
-            }
+            ctx.fillText(label, sx, label_sy);
         }
     }
     const Y_TICK_LABEL_MARGIN = 6
     for (let i = 0; i < yAxes_sx.length; i++) {
+        const yAxis = this.yAxes[i];
         const sx = yAxes_sx[i];
+        const label_sx = (sx > w / 2 ? sx - 6 : sx + 6);
+        ctx.textAlign = (sx > w / 2 ? "right" : "left");
+        
+        // 軸ラベル
+        let AxisNameYmax = 0;
+        if ( drawAxisName ) {
+            ctx.font = "bold 12px sans-serif";
+            ctx.textBaseline = "bottom";
+            const m = ctx.measureText(yAxis.name);
+            AxisNameYmax = 5 + (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent) + 5;
+            ctx.fillText(yAxis.name, label_sx, AxisNameYmax - 5);
+        }
+
+        // 目盛りラベル
+        ctx.font = "12px sans-serif";
+        ctx.textBaseline = "middle";
         for (let j = 0; j < yAxes_ticks[i].length; j++) {
             const t = yAxes_ticks[i][j];
             const sy = yAxes_ticks_sy[i][j];
   
-            // 端すぎたりY軸と被るラベルは描画しない
+            // 端すぎたり、Y軸や軸ラベルと被る目盛りラベルは描画しない
             let skip = false;
-            if (sy < Y_TICK_LABEL_MARGIN) continue;
+            if (sy < AxisNameYmax + Y_TICK_LABEL_MARGIN) continue;
             if (sy > h - Y_TICK_LABEL_MARGIN) continue;
             for(const xaxis_sy of xAxes_sy) {
                 if (sy >= xaxis_sy - Y_TICK_LABEL_MARGIN && sy <= xaxis_sy + Y_TICK_LABEL_MARGIN) { skip = true; break; }
@@ -279,14 +300,7 @@ class Graph2D {
   
             let t_ = Number(t.toFixed(12));
             let label = t_.toString(); if (label.length >= 7) label = t_.toExponential(2);
-            ctx.textBaseline = "middle";
-            if (sx > w / 2) {
-              ctx.textAlign = "right";
-              ctx.fillText(label, sx - 6, sy);
-            } else {
-              ctx.textAlign = "left";
-              ctx.fillText(label, sx + 6, sy);
-            }
+            ctx.fillText(label, label_sx, sy);
         }
     }
   }

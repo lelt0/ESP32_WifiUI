@@ -4,26 +4,30 @@
 class Axis {
   constructor(name, min = -10, max = 10, tickLength = 6, drawAt = "lowest") {
     this.name = name;
-    this.min = min;
-    this.max = max;
+    this.min_ = min;
+    this.range_ = max - min;
     this.tickLength = tickLength; // if < 0, that means full length
     this.drawAt = drawAt; // "lowest" or "highest" or AxisObject (means this Axis is drawn at '0' of AxisObject)
   }
 
-  createTicks(targetCount = 10) {
-    const range = this.max - this.min;
-    if (range <= 0) return [];
+  offset(v) { this.min_ += v; }
+  min() { return this.min_; }
+  max() { return this.min_ + this.range_; }
+  range() { return this.range_; }
 
-    const roughStep = range / targetCount;
+  createTicks(targetCount = 10) {
+    if (this.range_ <= 0) return [];
+
+    const roughStep = this.range_ / targetCount;
     const pow = Math.pow(10, Math.floor(Math.log10(roughStep)));
     const steps = [1, 2, 5].map(v => v * pow);
     const step = steps.reduce((prev, curr) =>
       Math.abs(curr - roughStep) < Math.abs(prev - roughStep) ? curr : prev
     );
 
-    const start = Math.ceil(this.min / step) * step;
+    const start = Math.ceil(this.min_ / step) * step;
     const ticks = [];
-    for (let v = start; v <= this.max; v += step) { ticks.push(v); }
+    for (let v = start; v <= this.max(); v += step) { ticks.push(v); }
     return ticks;
   }
 }
@@ -117,13 +121,13 @@ class Graph2D {
     let sx = x;
     if (xAxis) {
       const w = this.canvas.width / (window.devicePixelRatio || 1);
-      sx = (x - xAxis.min) / (xAxis.max - xAxis.min) * w;
+      sx = (x - xAxis.min()) / xAxis.range() * w;
     }
 
     let sy = y;
     if (yAxis) {
       const h = this.canvas.height / (window.devicePixelRatio || 1);
-      sy = h - (y - yAxis.min) / (yAxis.max - yAxis.min) * h;
+      sy = h - (y - yAxis.min()) / yAxis.range() * h;
     }
 
     return [sx, sy];
@@ -169,7 +173,7 @@ class Graph2D {
     {
       const dummy_yAxis = ((xAxis.drawAt instanceof Axis) ? xAxis.drawAt : this.yAxes[0]);
       let xaxis_sy = this.toScreen(0, 
-        xAxis.drawAt instanceof Axis ? 0 : (xAxis.drawAt === "highest" ? dummy_yAxis.max : dummy_yAxis.min), 
+        xAxis.drawAt instanceof Axis ? 0 : (xAxis.drawAt === "highest" ? dummy_yAxis.max() : dummy_yAxis.min()), 
         xAxis, dummy_yAxis)[1];
       xaxis_sy = xaxis_sy < 0 ? 0 : (xaxis_sy > w ? w : xaxis_sy);
       xAxes_sy.push(xaxis_sy);
@@ -180,7 +184,7 @@ class Graph2D {
     {
       const dummy_xAxis = ((yAxis.drawAt instanceof Axis) ? yAxis.drawAt : this.xAxes[0]);
       let yaxis_sx = this.toScreen(
-        yAxis.drawAt instanceof Axis ? 0 : (yAxis.drawAt === "highest"? dummy_xAxis.max : dummy_xAxis.min), 
+        yAxis.drawAt instanceof Axis ? 0 : (yAxis.drawAt === "highest"? dummy_xAxis.max() : dummy_xAxis.min()), 
         0, dummy_xAxis, yAxis)[0];
       yaxis_sx = yaxis_sx < 0 ? 0 : (yaxis_sx > h ? h : yaxis_sx);
       this.drawLine(yaxis_sx, 0, yaxis_sx, h, null, null, "#888", 2);

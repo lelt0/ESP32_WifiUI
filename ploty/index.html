@@ -50,6 +50,7 @@ canvas { display: block;
 // =========================
 const canvas = document.getElementById("graph");
 const graph = new Graph2D(canvas, heightRatio=0.8);
+graph.xAxes.push(new Axis("X1", 5, 15, "highest"));
 
 function random(min, max) {
   return Math.random() * (max - min) + min;
@@ -60,8 +61,8 @@ function randomColor() {
 }
 
 document.getElementById("addPoint").addEventListener("click", () => {
-  const x = random(-10, 10);
-  const y = random(-10, 10);
+  const x = random(0, 10);
+  const y = random(0, 1);
 
   graph.addData("series1", x, y);
   graph.render();

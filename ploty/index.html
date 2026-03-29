@@ -51,6 +51,7 @@ canvas { display: block;
 const canvas = document.getElementById("graph");
 const graph = new Graph2D(canvas, heightRatio=0.8);
 graph.xAxes.push(new Axis("X1", 5, 15, "highest"));
+graph.render();
 
 function random(min, max) {
   return Math.random() * (max - min) + min;

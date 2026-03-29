@@ -221,7 +221,8 @@ class Graph2D {
             }
             if (skip) continue;
 
-            let label = t.toString(); if (label.length >= 7) label = t.toExponential(2);
+            let t_ = Number(t.toFixed(12));
+            let label = t_.toString(); if (label.length >= 7) label = t_.toExponential(2);
             ctx.fillStyle = "#444";
             ctx.font = "12px sans-serif";
             ctx.textAlign = "center";
@@ -250,7 +251,8 @@ class Graph2D {
             }
             if (skip) continue;
   
-            let label = t.toString(); if (label.length >= 7) label = t.toExponential(2);
+            let t_ = Number(t.toFixed(12));
+            let label = t_.toString(); if (label.length >= 7) label = t_.toExponential(2);
             ctx.textBaseline = "middle";
             if (sx > w / 2) {
               ctx.textAlign = "right";

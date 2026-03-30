@@ -1,31 +1,36 @@
 // =========================
 // Axis
 // =========================
-class Axis {
-  constructor(name, min = -10, max = 10, tickLength = 6, drawAt = "lowest") {
-    this.name = name;
-    this.min_ = min;
-    this.range_ = max - min;
-    this.tickLength = tickLength; // if < 0, that means full length
-    this.drawAt = drawAt; // "lowest" or "highest" or AxisObject (means this Axis is drawn at '0' of AxisObject)
+class _Axis {
+  constructor(name, min = -10, max = 10, tickLength = 6, drawAt = 0) {
+    this._name = name;
+    this._min = min;
+    this._range = max - min;
+    this._tickLength = tickLength; // if < 0, that means full length
+    this._drawAt = drawAt; // int means offset [pix] from min (if < 0, from max), or AxisObject means this Axis is drawn at '0' of AxisObject
   }
 
-  offset(v) { this.min_ += v; }
-  min() { return this.min_; }
-  max() { return this.min_ + this.range_; }
-  range() { return this.range_; }
+  name() { return this._name; }
+  offset(v) { this._min += v; }
+  min() { return this._min; }
+  max() { return this._min + this._range; }
+  range() { return this._range; }
+  tickLength() { return this._tickLength; }
+  drawAt() { return this._drawAt; }
+
+  setDrawAt(drawAt) { this._drawAt = drawAt; }
 
   createTicks(targetCount = 10) {
-    if (this.range_ <= 0) return [];
+    if (this._range <= 0) return [];
 
-    const roughStep = this.range_ / targetCount;
+    const roughStep = this._range / targetCount;
     const pow = Math.pow(10, Math.floor(Math.log10(roughStep)));
     const steps = [1, 2, 5].map(v => v * pow);
     const step = steps.reduce((prev, curr) =>
       Math.abs(curr - roughStep) < Math.abs(prev - roughStep) ? curr : prev
     );
 
-    const start = Math.ceil(this.min_ / step) * step;
+    const start = Math.ceil(this._min / step) * step;
     const ticks = [];
     for (let v = start; v <= this.max(); v += step) { ticks.push(v); }
     return ticks;
@@ -35,18 +40,25 @@ class Axis {
 // =========================
 // DataSeries2D
 // =========================
-class DataSeries2D {
-  constructor(name, color, xAxis, yAxis, drawPoints = true, drawLine = true) {
-    this.name = name;
-    this.color = color;
-    this.drawPoints = drawPoints;
-    this.drawLine = drawLine;
-    this.xAxis = xAxis;
-    this.yAxis = yAxis;
+class _DataSeries2D {
+  constructor(name, color, xAxis, yAxis, drawPoints = true, drawLines = true) {
+    this._name = name;
+    this._color = color;
+    this._drawPoints = drawPoints;
+    this._drawLines = drawLines;
+    this._xAxis = xAxis;
+    this._yAxis = yAxis;
 
     this.x = [];
     this.y = [];
   }
+
+  name() { return this._name; }
+  color() { return this._color; }
+  drawPoints() { return this._drawPoints; }
+  drawLines() { return this._drawLines; }
+  xAxis() { return this._xAxis; }
+  yAxis() { return this._yAxis; }
 
   addData(x, y) {
     this.x.push(x);
@@ -60,73 +72,73 @@ class DataSeries2D {
 }
 
 // =========================
-// Graph2D
+// Plot2D
 // =========================
-class Graph2D {
+class Plot2D {
   constructor(canvas, heightRatio=0.8, yRange=[0, 1], xRange=[0, 10]) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext("2d");
+    this._canvas = canvas;
+    this._ctx = canvas.getContext("2d");
 
-    this.viewHeightRatio = heightRatio;
-    this.xAxes = [new Axis("X0", xRange[0], xRange[1], -1)];
-    this.yAxes = [new Axis("Y0", yRange[0], yRange[1], -1)];
-    this.xAxes[0].drawAt = this.yAxes[0];
-    this.yAxes[0].drawAt = this.xAxes[0];
+    this._viewHeightRatio = heightRatio;
+    this._xAxes = [new _Axis("X", xRange[0], xRange[1], -1)];
+    this._yAxes = [new _Axis("Y", yRange[0], yRange[1], -1)];
+    this._xAxes[0].setDrawAt(this._yAxes[0]);
+    this._yAxes[0].setDrawAt(this._xAxes[0]);
 
-    this.seriesList = [];
+    this._seriesList = [];
 
     this.resize();
     window.addEventListener("resize", () => this.resize());
   }
 
   addXAxis(name, min, max, tickLength = undefined, drawAt = undefined) {
-    const a = new Axis(name, min, max, tickLength, drawAt);
-    this.xAxes.push(a);
+    const a = new _Axis(name, min, max, tickLength, drawAt);
+    this._xAxes.push(a);
     return a;
   }
 
   addYAxis(name, min, max, tickLength = undefined, drawAt = undefined) {
-    const a = new Axis(name, min, max, tickLength, drawAt);
-    this.yAxes.push(a);
+    const a = new _Axis(name, min, max, tickLength, drawAt);
+    this._yAxes.push(a);
     return a;
   }
 
   getSeries(name) {
-    return this.seriesList.find(s => s.name === name);
+    return this._seriesList.find(s => s.name() === name);
   }
 
-  addSeries(name, color, x = null, y = null, drawPoints = true, drawLine = true, xAxis = this.xAxes[0], yAxis = this.yAxes[0]) {
-    const s = new DataSeries2D(name, color, xAxis, yAxis, drawPoints, drawLine);
+  addSeries(name, color, x = null, y = null, drawPoints = true, drawLine = true, xAxis = this._xAxes[0], yAxis = this._yAxes[0]) {
+    const s = new _DataSeries2D(name, color, xAxis, yAxis, drawPoints, drawLine);
     if (!y) y = [];
     if (!x) x = [...Array(y.length).keys()];
     s.setData(x, y);
-    this.seriesList.push(s);
+    this._seriesList.push(s);
     return s;
   }
 
   // 高DPI対応リサイズ
   resize() {
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = this._canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
 
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.width * dpr * this.viewHeightRatio;
+    this._canvas.width = rect.width * dpr;
+    this._canvas.height = rect.width * dpr * this._viewHeightRatio;
 
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     this.render();
   }
 
-  toScreen(x, y, xAxis = undefined, yAxis = undefined) {
+  _toScreen(x, y, xAxis = undefined, yAxis = undefined) {
     let sx = x;
     if (xAxis) {
-      const w = this.canvas.width / (window.devicePixelRatio || 1);
+      const w = this._canvas.width / (window.devicePixelRatio || 1);
       sx = (x - xAxis.min()) / xAxis.range() * w;
     }
 
     let sy = y;
     if (yAxis) {
-      const h = this.canvas.height / (window.devicePixelRatio || 1);
+      const h = this._canvas.height / (window.devicePixelRatio || 1);
       sy = h - (y - yAxis.min()) / yAxis.range() * h;
     }
 
@@ -134,103 +146,110 @@ class Graph2D {
   }
 
   clear() {
-    const w = this.canvas.width / (window.devicePixelRatio || 1);
-    const h = this.canvas.height / (window.devicePixelRatio || 1);
-    this.ctx.clearRect(0, 0, w, h);
+    const w = this._canvas.width / (window.devicePixelRatio || 1);
+    const h = this._canvas.height / (window.devicePixelRatio || 1);
+    this._ctx.clearRect(0, 0, w, h);
   }
 
   // TODO: データ数が多くなったら連続描画（polyline）を検討 
-  drawLine(x1, y1, x2, y2, xAxis = undefined, yAxis = undefined, color = "#888", width = 1) {
-    const [sx1, sy1] = this.toScreen(x1, y1, xAxis, yAxis);
-    const [sx2, sy2] = this.toScreen(x2, y2, xAxis, yAxis);
+  _drawLine(x1, y1, x2, y2, xAxis = undefined, yAxis = undefined, color = "#888", width = 1) {
+    const [sx1, sy1] = this._toScreen(x1, y1, xAxis, yAxis);
+    const [sx2, sy2] = this._toScreen(x2, y2, xAxis, yAxis);
 
-    this.ctx.beginPath();
-    this.ctx.moveTo(sx1, sy1);
-    this.ctx.lineTo(sx2, sy2);
-    this.ctx.strokeStyle = color;
-    this.ctx.lineWidth = width;
-    this.ctx.stroke();
+    this._ctx.beginPath();
+    this._ctx.moveTo(sx1, sy1);
+    this._ctx.lineTo(sx2, sy2);
+    this._ctx.strokeStyle = color;
+    this._ctx.lineWidth = width;
+    this._ctx.stroke();
   }
 
-  drawPoint(x, y, xAxis = undefined, yAxis = undefined, r = 4, color = "red") {
-    const [sx, sy] = this.toScreen(x, y, xAxis, yAxis);
+  _drawPoint(x, y, xAxis = undefined, yAxis = undefined, r = 4, color = "red") {
+    const [sx, sy] = this._toScreen(x, y, xAxis, yAxis);
 
-    this.ctx.beginPath();
-    this.ctx.arc(sx, sy, r, 0, Math.PI * 2);
-    this.ctx.fillStyle = color;
-    this.ctx.fill();
+    this._ctx.beginPath();
+    this._ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    this._ctx.fillStyle = color;
+    this._ctx.fill();
   }
 
-  drawAxes(drawAxisName = true) {
-    const ctx = this.ctx;
+  _drawAxes(drawAxisName = true) {
+    const ctx = this._ctx;
     const dpr = window.devicePixelRatio || 1;
-    const w = this.canvas.width / dpr;
-    const h = this.canvas.height / dpr;
+    const w = this._canvas.width / dpr;
+    const h = this._canvas.height / dpr;
 
     // X軸の描画Y座標
     const xAxes_sy = [];
-    for (const xAxis of this.xAxes)
+    for (const xAxis of this._xAxes)
     {
-      const dummy_yAxis = ((xAxis.drawAt instanceof Axis) ? xAxis.drawAt : this.yAxes[0]);
-      let xaxis_sy = this.toScreen(0, 
-        xAxis.drawAt instanceof Axis ? 0 : (xAxis.drawAt === "highest" ? dummy_yAxis.max() : dummy_yAxis.min()), 
-        xAxis, dummy_yAxis)[1];
-      xaxis_sy = xaxis_sy < 0 ? 0 : (xaxis_sy > w ? w : xaxis_sy);
+      let xaxis_sy;
+      if (xAxis.drawAt() instanceof _Axis) {
+        xaxis_sy = this._toScreen(0, 0, null, xAxis.drawAt())[1];
+      } else if (xAxis.drawAt() < 0) {
+        xaxis_sy = h + xAxis.drawAt();
+      } else {
+        xaxis_sy = xAxis.drawAt();
+      }
+      xaxis_sy = xaxis_sy < 0 ? 0 : (xaxis_sy > h ? h : xaxis_sy);
       xAxes_sy.push(xaxis_sy);
     }
     // Y軸の描画X座標
     const yAxes_sx = [];
-    for (const yAxis of this.yAxes)
+    for (const yAxis of this._yAxes)
     {
-      const dummy_xAxis = ((yAxis.drawAt instanceof Axis) ? yAxis.drawAt : this.xAxes[0]);
-      let yaxis_sx = this.toScreen(
-        yAxis.drawAt instanceof Axis ? 0 : (yAxis.drawAt === "highest"? dummy_xAxis.max() : dummy_xAxis.min()), 
-        0, dummy_xAxis, yAxis)[0];
-      yaxis_sx = yaxis_sx < 0 ? 0 : (yaxis_sx > h ? h : yaxis_sx);
-      this.drawLine(yaxis_sx, 0, yaxis_sx, h, null, null, "#888", 2);
+      let yaxis_sx;
+      if (yAxis.drawAt() instanceof _Axis) {
+        yaxis_sx = this._toScreen(0, 0, yAxis.drawAt(), null)[0];
+      } else if (yAxis.drawAt() < 0) {
+        yaxis_sx = w + yAxis.drawAt();
+      } else {
+        yaxis_sx = yAxis.drawAt();
+      }
+      yaxis_sx = yaxis_sx < 0 ? 0 : (yaxis_sx > w ? w : yaxis_sx);
       yAxes_sx.push(yaxis_sx);
     }
 
     // X軸の目盛り線X座標
     const xAxes_ticks = []
     const xAxes_ticks_sx = []
-    for (const xAxis of this.xAxes) {
+    for (const xAxis of this._xAxes) {
         const xAxis_ticks = xAxis.createTicks()
         xAxes_ticks.push(xAxis_ticks)
-        xAxes_ticks_sx.push(xAxis_ticks.map((t) => this.toScreen(t, 0, xAxis, null)[0]));
+        xAxes_ticks_sx.push(xAxis_ticks.map((t) => this._toScreen(t, 0, xAxis, null)[0]));
     }
     // Y軸の目盛り線Y座標
     const yAxes_ticks = []
     const yAxes_ticks_sy = []
-    for (const yAxis of this.yAxes) {
+    for (const yAxis of this._yAxes) {
         const yAxis_ticks = yAxis.createTicks()
         yAxes_ticks.push(yAxis_ticks)
-        yAxes_ticks_sy.push(yAxis_ticks.map((t) => this.toScreen(0, t, null, yAxis)[1]));
+        yAxes_ticks_sy.push(yAxis_ticks.map((t) => this._toScreen(0, t, null, yAxis)[1]));
     }
 
     // 目盛り線
     for (let i = 0; i < xAxes_ticks_sx.length; i++) {
         const sy = xAxes_sy[i];
-        const tickLength = this.xAxes[i].tickLength;
+        const tickLength = this._xAxes[i].tickLength();
         const [y0, y1] = (tickLength < 0 ? [0, h] : [sy - tickLength, sy + tickLength]);
-        for (const sx of xAxes_ticks_sx[i]) this.drawLine(sx, y0, sx, y1, null, null, "#ccc", 1);
+        for (const sx of xAxes_ticks_sx[i]) this._drawLine(sx, y0, sx, y1, null, null, "#ccc", 1);
     }
     for (let i = 0; i < yAxes_ticks_sy.length; i++) {
         const sx = yAxes_sx[i];
-        const tickLength = this.yAxes[i].tickLength;
+        const tickLength = this._yAxes[i].tickLength();
         const [x0, x1] = (tickLength < 0 ? [0, w] : [sx - tickLength, sx + tickLength])
-        for (const sy of yAxes_ticks_sy[i]) this.drawLine(x0, sy, x1, sy, null, null, "#ccc", 1);
+        for (const sy of yAxes_ticks_sy[i]) this._drawLine(x0, sy, x1, sy, null, null, "#ccc", 1);
     }
 
     // 軸
-    for (const sy of xAxes_sy) this.drawLine(0, sy, w, sy, null, null, "#888", 2);
-    for (const sx of yAxes_sx) this.drawLine(sx, 0, sx, h, null, null, "#888", 2);
+    for (const sy of xAxes_sy) this._drawLine(0, sy, w, sy, null, null, "#888", 2);
+    for (const sx of yAxes_sx) this._drawLine(sx, 0, sx, h, null, null, "#888", 2);
 
     // ラベル
     ctx.fillStyle = "#444";
     const X_TICK_LABEL_MARGIN = 5;
     for (let i = 0; i < xAxes_sy.length; i++) {
-        const xAxis = this.xAxes[i];
+        const xAxis = this._xAxes[i];
         const sy = xAxes_sy[i];
         const label_sy = (sy < h / 2 ? sy + 6 : sy - 6);
         ctx.textBaseline = (sy < h / 2 ? "top" : "bottom");
@@ -240,8 +259,8 @@ class Graph2D {
         if ( drawAxisName ) {
             ctx.font = "bold 12px sans-serif";
             ctx.textAlign = "left";
-            AxisNameXmin = w - (5 + ctx.measureText(xAxis.name).width + 5);
-            ctx.fillText(xAxis.name, AxisNameXmin + 5, label_sy);
+            AxisNameXmin = w - (5 + ctx.measureText(xAxis.name()).width + 5);
+            ctx.fillText(xAxis.name(), AxisNameXmin + 5, label_sy);
         }
 
         // 目盛りラベル
@@ -267,7 +286,7 @@ class Graph2D {
     }
     const Y_TICK_LABEL_MARGIN = 6
     for (let i = 0; i < yAxes_sx.length; i++) {
-        const yAxis = this.yAxes[i];
+        const yAxis = this._yAxes[i];
         const sx = yAxes_sx[i];
         const label_sx = (sx > w / 2 ? sx - 6 : sx + 6);
         ctx.textAlign = (sx > w / 2 ? "right" : "left");
@@ -277,9 +296,9 @@ class Graph2D {
         if ( drawAxisName ) {
             ctx.font = "bold 12px sans-serif";
             ctx.textBaseline = "bottom";
-            const m = ctx.measureText(yAxis.name);
+            const m = ctx.measureText(yAxis.name());
             AxisNameYmax = 5 + (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent) + 5;
-            ctx.fillText(yAxis.name, label_sx, AxisNameYmax - 5);
+            ctx.fillText(yAxis.name(), label_sx, AxisNameYmax - 5);
         }
 
         // 目盛りラベル
@@ -305,12 +324,12 @@ class Graph2D {
     }
   }
 
-  drawLegend() {
+  _drawLegend() {
     // 凡例描画
-    const ctx = this.ctx;
+    const ctx = this._ctx;
     const dpr = window.devicePixelRatio || 1;
-    const w = this.canvas.width / dpr;
-    const h = this.canvas.height / dpr;
+    const w = this._canvas.width / dpr;
+    const h = this._canvas.height / dpr;
 
     ctx.font = "16px sans-serif";
     const padding = 6;
@@ -319,14 +338,14 @@ class Graph2D {
 
     // 最大文字幅取得
     let maxWidth = 0;
-    for (const s of this.seriesList) {
-      const m = ctx.measureText(s.name).width;
+    for (const s of this._seriesList) {
+      const m = ctx.measureText(s.name()).width;
       if (m > maxWidth) maxWidth = m;
     }
 
     // 枠サイズ
     const boxW = maxWidth + padding * 2;
-    const boxH = this.seriesList.length * lineHeight + padding * 2;
+    const boxH = this._seriesList.length * lineHeight + padding * 2;
 
     // 右下配置
     const x0 = w - boxW - 20;
@@ -337,45 +356,45 @@ class Graph2D {
     ctx.fillRect(x0, y0, boxW, boxH);
 
     // テキスト
-    for (let i = 0; i < this.seriesList.length; i++) {
-      const s = this.seriesList[i];
-      ctx.fillStyle = s.color;
+    for (let i = 0; i < this._seriesList.length; i++) {
+      const s = this._seriesList[i];
+      ctx.fillStyle = s.color();
       const ty = y0 + padding + i * lineHeight + lineHeight / 2;
-      ctx.fillText(s.name, x0 + padding, ty);
+      ctx.fillText(s.name(), x0 + padding, ty);
     }
   }
 
   addData(name, x, y) {
     let s = this.getSeries(name);
     if (!s) {
-      s = new DataSeries2D(name, "red", this.xAxes[0], this.yAxes[0], true, true);
-      this.seriesList.push(s);
+      s = new _DataSeries2D(name, "red", this._xAxes[0], this._yAxes[0], true, true);
+      this._seriesList.push(s);
     }
     s.addData(x, y);
   }
 
   render() {
     this.clear();
-    this.drawAxes();
+    this._drawAxes(false);
 
-    for (const s of this.seriesList) {
+    for (const s of this._seriesList) {
       const n = s.x.length;
 
       // 線
-      if (s.drawLine && n > 1) {
+      if (s.drawLines() && n > 1) {
         for (let i = 0; i < n - 1; i++) {
-          this.drawLine(s.x[i], s.y[i], s.x[i+1], s.y[i+1], s.xAxis, s.yAxis, s.color, 1);
+          this._drawLine(s.x[i], s.y[i], s.x[i+1], s.y[i+1], s.xAxis(), s.yAxis(), s.color(), 1);
         }
       }
 
       // 点
-      if (s.drawPoints) {
+      if (s.drawPoints()) {
         for (let i = 0; i < n; i++) {
-          this.drawPoint(s.x[i], s.y[i], s.xAxis, s.yAxis, 4, s.color);
+          this._drawPoint(s.x[i], s.y[i], s.xAxis(), s.yAxis(), 4, s.color());
         }
       }
     }
 
-    this.drawLegend();
+    this._drawLegend();
   }
 }

@@ -44,9 +44,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
     dstring_t* series_colors = dstring_create_json_list(self_plot->series_colors, self_plot->series_count, 8);
     dstring_t* html = dstring_create(1024);
     dstring_appendf(html, 
-        "<div class='container'>"
-        "<canvas id='%s_plot'></canvas>"
-        "</div>"
+        "<div class='container'><canvas id='%s_plot'></canvas></div>"
         "<script>"
         "{"
             "const plot_id = '%s_plot';"

@@ -79,6 +79,7 @@ class Plot2D {
   constructor(canvas, heightRatio=0.8, yRange=[0, 1], xRange=[0, 10]) {
     this._canvas = canvas;
     this._ctx = canvas.getContext("2d");
+    this._dpr = window.devicePixelRatio || 1;
 
     this._viewHeightRatio = heightRatio;
     this._xAxes = [new _Axis("X", xRange[0], xRange[1], -1)];
@@ -120,12 +121,11 @@ class Plot2D {
   // 高DPI対応リサイズ
   resize() {
     const rect = this._canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
 
-    this._canvas.width = rect.width * dpr;
-    this._canvas.height = rect.width * dpr * this._viewHeightRatio;
+    this._canvas.width = rect.width * this._dpr;
+    this._canvas.height = rect.width * this._dpr * this._viewHeightRatio;
 
-    this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
 
     this.render();
   }
@@ -133,13 +133,13 @@ class Plot2D {
   _toScreen(x, y, xAxis = undefined, yAxis = undefined) {
     let sx = x;
     if (xAxis) {
-      const w = this._canvas.width / (window.devicePixelRatio || 1);
+      const w = this._canvas.width / this._dpr;
       sx = (x - xAxis.min()) / xAxis.range() * w;
     }
 
     let sy = y;
     if (yAxis) {
-      const h = this._canvas.height / (window.devicePixelRatio || 1);
+      const h = this._canvas.height / this._dpr;
       sy = h - (y - yAxis.min()) / yAxis.range() * h;
     }
 
@@ -147,8 +147,8 @@ class Plot2D {
   }
 
   clear() {
-    const w = this._canvas.width / (window.devicePixelRatio || 1);
-    const h = this._canvas.height / (window.devicePixelRatio || 1);
+    const w = this._canvas.width / this._dpr;
+    const h = this._canvas.height / this._dpr;
     this._ctx.clearRect(0, 0, w, h);
   }
 
@@ -176,9 +176,8 @@ class Plot2D {
 
   _drawAxes(drawAxisName = true) {
     const ctx = this._ctx;
-    const dpr = window.devicePixelRatio || 1;
-    const w = this._canvas.width / dpr;
-    const h = this._canvas.height / dpr;
+    const w = this._canvas.width / this._dpr;
+    const h = this._canvas.height / this._dpr;
 
     // X軸の描画Y座標
     const xAxes_sy = [];
@@ -328,9 +327,8 @@ class Plot2D {
   _drawLegend() {
     // 凡例描画
     const ctx = this._ctx;
-    const dpr = window.devicePixelRatio || 1;
-    const w = this._canvas.width / dpr;
-    const h = this._canvas.height / dpr;
+    const w = this._canvas.width / this._dpr;
+    const h = this._canvas.height / this._dpr;
 
     ctx.font = "16px sans-serif";
     ctx.textAlign = "left";
@@ -355,7 +353,7 @@ class Plot2D {
     const y0 = h - boxH - 20;
 
     // 背景
-    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.fillStyle = "#FFFB";
     ctx.fillRect(x0, y0, boxW, boxH);
 
     // テキスト

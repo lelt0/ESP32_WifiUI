@@ -333,6 +333,8 @@ class Plot2D {
     const h = this._canvas.height / dpr;
 
     ctx.font = "16px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
     const padding = 6;
     const fontSize = 16;
     const lineHeight = fontSize * 1.2;

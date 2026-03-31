@@ -1,0 +1,13 @@
+{
+  "compress": true,
+  "mangle": {
+    "keep_classnames": true,
+    "keep_fnames": true,
+    "properties": {
+      "regex": "^_"
+    }
+  },
+  "format": {
+    "comments": false
+  }
+}

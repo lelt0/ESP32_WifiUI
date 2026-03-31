@@ -21,7 +21,7 @@ wifiui_page_t * wifiui_create_page(const char * title)
     page->elements = NULL;
     page->element_count = 0;
     page->use_websocket = false;
-    page->use_plotly = false;
+    page->use_ploty = false;
 
     register_page(page);
 
@@ -42,7 +42,7 @@ size_t wifiui_add_element(wifiui_page_t* page, const wifiui_element_t* element)
 
     if(element->system.use_websocket || element->system.on_recv_data != NULL) page->use_websocket = true;
 
-    if(element->system.use_plotly) page->use_plotly = true;
+    if(element->system.use_ploty) page->use_ploty = true;
 
     return page->element_count;
 }
@@ -102,7 +102,7 @@ dstring_t* wifiui_generate_page_html(const wifiui_page_t* page)
     
     dstring_appendf(html, html_head_template, page->title);
     if(page->use_websocket) dstring_appendf(html, "%s", html_websocket_template);
-    if(page->use_plotly) dstring_appendf(html, "<script src='/plotly.min.js'></script>");
+    if(page->use_ploty) dstring_appendf(html, "<script src='/ploty.js'></script>");
     for(int i = 0; i < page->element_count; i++) {
         wifiui_element_t* element = (wifiui_element_t*)page->elements[i];
         if(element->system.create_partial_html != NULL) {
@@ -120,24 +120,36 @@ const char * html_head_template = R"(
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset='utf-8'/>
-<meta name='viewport' content='width=device-width, initial-scale=1'>
+<meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1.0">
 <title>%s</title>
-<style type='text/css'>
-body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; line-height: 1.6; max-width: 900px; margin-left: auto; margin-right: auto; } 
-h1, h2, h3 { line-height: 1.2; }
-button { padding: 0.6em 1.2em; font-size: 1rem; border: none; border-radius: 0.5em; background: #0078ff; color: white; cursor: pointer; } button:hover { background: #005fcc; } 
-img, video { max-width: 100%%; height: auto; display: block; margin: 1rem 0; } 
-.wrap_text { white-space: pre-wrap; }
-.multi_input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 0.5em; margin-bottom: -0.4em; }
-.single_input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 0.5em; }
-.combo_input { width: 100%%; padding: 8px; box-sizing: border-box; }
-.combo_list { top: 100%%; left: 0; right: 0; border: 1px solid #ccc; border-top: none; overflow-y: auto; display: none; z-index: 1000; }
-.combo_item { padding: 6px 8px; cursor: pointer; }
-.combo_item:hover { background: #def; }
-.message_log {width: 100%%; height: 200px; border: 1px solid #ccc; resize: none; overflow-y: auto; word-break: break-all; overflow-wrap: break-word; }
-@media (max-width: 600px) { body { padding: 0.8rem; font-size: 0.95rem; } button { width: 100%%; } } 
-@media (min-width: 601px) { body { font-size: 1.05rem; } }
+<style>
+* { box-sizing: border-box; }
+
+body { background: #FFF; color: #222; font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; 
+  width: min(100vh, 100vw); margin: 0 auto; padding: 1em 1em;
+}
+
+h1, h2, h3, h4, h5, h6, p { margin: 0 0 0.8em 0; text-align: left; }
+
+button { display: block;
+  margin: 0.5em auto; padding: 12px 16px; border: none; border-radius: 8px;
+  font-size: 1rem; background: #2d6cdf; color: #fff; cursor: pointer;
+}
+button { width: 100%%;} @media (min-width: 600px) { button { width: auto; min-width: 100px; } }
+button:hover { background: #005fcc; } 
+
+img, video { display: block; 
+  margin: 10px auto; max-width: 100%%; max-height: 100vh; }
+
+.container { width: 100%%; margin: 0 auto; }
+canvas { display: block; 
+  margin: 10px auto; width: 100%%; height: auto;
+  background: #fff; border: 1px solid #eee;
+}
+
+.inline { display: inline-block;
+  margin: 5px; width: auto;
+}
 </style>
 <script>
 function fit_textarea_height(id){ t = document.getElementById(id); t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }

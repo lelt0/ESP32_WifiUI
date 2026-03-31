@@ -16,7 +16,7 @@ const wifiui_element_scatter3dplot_t * wifiui_element_scatter3d_plot(
     wifiui_element_scatter3dplot_t* self = (wifiui_element_scatter3dplot_t*)malloc(sizeof(wifiui_element_scatter3dplot_t));
     set_default_common(&self->common, WIFIUI_TIMEPLOT, create_partial_html);
     self->common.system.use_websocket = true;
-    self->common.system.use_plotly = true;
+    self->common.system.use_ploty = true;
 
     self->plot_title = strdup(plot_title);
     self->x_min = x_min;

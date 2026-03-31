@@ -10,7 +10,6 @@ extern "C" {
 typedef struct wifiui_element_timeplot wifiui_element_timeplot_t;
 struct wifiui_element_timeplot {
     wifiui_element_t common;
-    const char* plot_title;
     uint8_t series_count;
     char** series_names;
     char** series_colors;
@@ -24,7 +23,7 @@ struct wifiui_element_timeplot {
 };
 
 const wifiui_element_timeplot_t * wifiui_element_timeplot(
-    const char* plot_title, uint8_t series_count, char** series_names, 
+    uint8_t series_count, char** series_names, 
     const char* y_label, float y_min, float y_max, 
     float time_window_sec);
 

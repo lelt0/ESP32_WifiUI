@@ -35,7 +35,7 @@ struct wifiui_element {
         void (*on_post_from_this_element)(wifiui_element_t*, httpd_req_t*);
         bool use_websocket;
         void (*on_recv_data)(wifiui_element_t* self, const uint8_t* data, size_t len);
-        bool use_plotly;
+        bool use_ploty;
     } system;
 };
 

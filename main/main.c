@@ -194,7 +194,7 @@ void app_main(void)
 
     /* Time Plot sample */
     wifiui_add_element(timeplot_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
-    wifiui_add_element(timeplot_page, (const wifiui_element_t*) (timeplot = wifiui_element_timeplot("Plot Sample", 3, (char*[]){"signalA", "signalB", "signalC"}, "Value", -2, 2, 30)));
+    wifiui_add_element(timeplot_page, (const wifiui_element_t*) (timeplot = wifiui_element_timeplot(3, (char*[]){"signalA", "signalB", "signalC"}, "Value", -2, 2, 30)));
 
     /* Scatter (X-Y) Plot sample */
     wifiui_add_element(scatter_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));

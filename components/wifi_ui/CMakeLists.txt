@@ -3,4 +3,5 @@ file(GLOB_RECURSE WIFI_UI_SRCS
 )
 idf_component_register(SRCS ${WIFI_UI_SRCS}
                        INCLUDE_DIRS include
-                       PRIV_REQUIRES esp_http_server esp_netif nvs_flash esp_wifi spiffs)
+                       PRIV_REQUIRES esp_http_server esp_netif nvs_flash esp_wifi)
+target_add_binary_data(${COMPONENT_LIB} "${CMAKE_SOURCE_DIR}/ploty/dist/ploty.min.js.gz" BINARY)

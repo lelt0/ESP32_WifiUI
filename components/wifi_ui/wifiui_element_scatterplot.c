@@ -39,23 +39,22 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
             "const plot_id = '%s_plot';"
             "const COLORS = ['red', 'blue', 'green', 'orange', 'magenta', 'cyan', 'yellow'];"
             "const canvas = document.getElementById(plot_id);"
-            "const plot = new Plot2D(canvas, heightRatio=1.0, [%f, %f], [%f, %f]);"
-            "const series_names = [];" // TODO: plotlyに内包する
-            "// %s %s\n" // TODO: XY軸の名前
-            "// %s %s\n" // TODO: XY軸のオートレンジ
-
+            "const plot = new Plot2D(canvas, 1.0, [%f, %f], [%f, %f], '%s', '%s');"
+            "plot.getXAxis().drawName(true);"
+            "plot.getYAxis().drawName(true);"
 
             "function addPlot(series_name, x, y, draw_line) {"
+                "const series_names = plot.getSeriesNameList();"
                 "let idx = series_names.indexOf(series_name);"
                 "if (idx === -1) {"
                     // 新規系列
                     "idx = series_names.length;"
                     "plot.addSeries(series_name, COLORS[idx%%COLORS.length], x, y, true, draw_line);"
-                    "series_names.push(series_name);"
                 "} else {"
                     // 既存系列を更新
-                    "plot.getSeries(series_name).setData(x, y);"
-                    // TODO: draw_line対応
+                    "const s = plot.getSeries(series_name);"
+                    "s.setData(x, y);"
+                    "s.drawLines(draw_line);"
                 "}"
                 "plot.render();"
             "}"
@@ -116,7 +115,6 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
         , self_plot->common.id_str, self_plot->common.id_str
         , self_plot->x_min, self_plot->x_max, self_plot->y_min, self_plot->y_max
         , self_plot->x_label, self_plot->y_label
-        , self_plot->x_auto_scale?"true":"false", self_plot->y_auto_scale?"true":"false"
         , self_plot->common.id
     );
     return html;
@@ -125,8 +123,8 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
 void add_plot(const wifiui_element_scatterplot_t* self, const char* series_name, const uint32_t point_count, const float* x, const float* y, bool draw_line)
 {
     size_t series_name_size = strlen(series_name) + 1;
-    size_t x_offset = (((series_name_size + 1) / 4) + 1) * 4;
-    size_t half_length = point_count * sizeof(float);
+    size_t x_offset = (((series_name_size + 1) / 4) + 1) * 4; // series_name + draw_lineで4byteアライメント
+    size_t half_length = point_count * sizeof(float); // x,yそれぞれ分の片方の意
     size_t buf_size = x_offset + half_length * 2;
     char* buf = (char*)malloc(buf_size);
 

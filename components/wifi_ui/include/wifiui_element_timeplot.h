@@ -23,9 +23,8 @@ struct wifiui_element_timeplot {
 };
 
 const wifiui_element_timeplot_t * wifiui_element_timeplot(
-    uint8_t series_count, char** series_names, 
-    const char* y_label, float y_min, float y_max, 
-    float time_window_sec);
+    const char* y_label, float y_min, float y_max, float time_window_sec,
+    char** series_names, uint8_t series_count);
 
 #ifdef __cplusplus
 }

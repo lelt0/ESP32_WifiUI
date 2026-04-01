@@ -10,9 +10,8 @@ static void update_plots(const wifiui_element_timeplot_t* self, const uint64_t t
 static const char* COLORS[] = {"red", "blue", "green", "orange", "magenta", "cyan", "yellow"};
 
 const wifiui_element_timeplot_t * wifiui_element_timeplot(
-    uint8_t series_count, char** series_names, 
-    const char* y_label, float y_min, float y_max, 
-    float time_window_sec)
+    const char* y_label, float y_min, float y_max, float time_window_sec,
+    char** series_names, uint8_t series_count)
 {
     wifiui_element_timeplot_t* self = (wifiui_element_timeplot_t*)malloc(sizeof(wifiui_element_timeplot_t));
     set_default_common(&self->common, WIFIUI_TIMEPLOT, create_partial_html);
@@ -53,9 +52,9 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
 
             "let time0_sec = NaN;" // ESP時刻が0秒のときのページ時刻
             "const canvas = document.getElementById(plot_id);"
-            "const plot = new Plot2D(canvas, heightRatio=0.8, [-TIME_WINDOW, 0], FIXED_YRANGE);"
-            "const xaxis2 = plot.addXAxis('abs_t', -TIME_WINDOW, 0, undefined, 0);"
-            "// %s\n"// TODO: Y軸に命名
+            "const plot = new Plot2D(canvas, 0.8, [-TIME_WINDOW, 0], FIXED_YRANGE, undefined, '%s');"
+            "plot.getYAxis().drawName(true);"
+            "const xaxis2 = plot.addXAxis('abs_t', [-TIME_WINDOW, 0], undefined, 0);"
             
             "const series_names = %s;"
             "const series_colors = %s;"
@@ -66,15 +65,14 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
             "function updateValues(time_sec, values){"
                 "if(isNaN(time0_sec)){ time0_sec = performance.now() / 1000.0 - time_sec; }"
                 "values.forEach((value, i)=>{"
-                    "if(!isNaN(value)){ plot.addData(series_names[i], time_sec, value); }"
+                    "if(!isNaN(value)){ plot.getSeries(series_names[i]).addData(time_sec, value); }"
                 "});"
             "}"
             "function updatePlot(){"
                 "const now_sec = performance.now() / 1000.0;"
                 "if(isNaN(time0_sec)){return;}"
-                "xaxis2.setMin((now_sec - time0_sec) - TIME_WINDOW);"
-                // TODO: 過去のデータを削除
-                "// %s\n" // Y軸のオートスケール
+                "xaxis2.setMinMax(null, now_sec - time0_sec);"
+                "for(const sname of series_names){ plot.getSeries(sname).delOldX(); }" // 過去のデータを削除
                 "plot.render();"
             "}"
             "setInterval(() => { updatePlot(performance.now() / 1000.0);}, 100);"
@@ -110,10 +108,8 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
         "}"
         "</script>"
         , self_plot->common.id_str
-        , self_plot->common.id_str, self_plot->time_window_sec, self_plot->y_min, self_plot->y_max
-        , self_plot->y_label
+        , self_plot->common.id_str, self_plot->time_window_sec, self_plot->y_min, self_plot->y_max, self_plot->y_label
         , series_names->str, series_colors->str, self_plot->series_count
-        , (self_plot->y_auto_scale?"true":"false")
         , self_plot->common.id, self_plot->series_count
     );
     dstring_free(series_names);

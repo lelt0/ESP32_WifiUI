@@ -49,10 +49,12 @@ canvas { display: block;
 // 使用例
 // =========================
 const canvas = document.getElementById("graph");
-const graph = new Plot2D(canvas, heightRatio=0.8, undefined, [0, 1]);
-const axis_2nd = graph.addXAxis("X1 [ticks]", -1.6, 8.6, undefined, 0);
-graph.addSeries("dummy", "blue", null, [0,0.5,0.75], undefined, undefined, axis_2nd);
-graph.render();
+const plot = new Plot2D(canvas, 0.8, [0,0], [0,0]);
+const axis_2nd = plot.addXAxis("X1 [ticks]", [-1.6, 8.6], undefined, 0);
+axis_2nd.drawName(true);
+plot.addSeries("dummy", "red", null, null, false, true);
+plot.addSeries("dummy2", "blue", null, [0,0.5,0.75], undefined, undefined, axis_2nd);
+plot.render();
 
 function random(min, max) {
   return Math.random() * (max - min) + min;
@@ -66,10 +68,12 @@ document.getElementById("addPoint").addEventListener("click", () => {
   const x = random(0, 10);
   const y = random(0, 1);
 
-  graph.addData("series1", x, y);
-  graph.addData("dummy", x, y);
-  axis_2nd.offset(0.1);
-  graph.render();
+  plot.getSeries("dummy").addData(x, y);
+  plot.getSeries("dummy2").addData(x, y);
+  axis_2nd.setMinMax(axis_2nd.min()+0.1);
+  plot.getSeries("dummy").drawPoints(!plot.getSeries("dummy").drawPoints());
+  plot.getSeries("dummy2").delOldX();
+  plot.render();
 });
 </script>
 

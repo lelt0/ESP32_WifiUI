@@ -4,24 +4,31 @@
 class _Axis {
   constructor(name, min = -10, max = 10, tickLength = 6, drawAt = 0) {
     this._name = name;
+    this._autoScale = (min == max); // if min == max, that means AutoScale
     this._min = min;
     this._range = max - min;
     this._tickLength = tickLength; // if < 0, that means full length
     this._drawAt = drawAt; // int means offset [pix] from min (if < 0, from max), or AxisObject means this Axis is drawn at '0' of AxisObject
+    this._drawName = false;
   }
 
   name() { return this._name; }
-  offset(v) { this._min += v; }
   min() { return this._min; }
   max() { return this._min + this._range; }
   range() { return this._range; }
   tickLength() { return this._tickLength; }
-  drawAt() { return this._drawAt; }
+  drawAt(drawAt=null) { if(drawAt!=null){ this._drawAt = drawAt; } return this._drawAt; }
+  drawName(b=null) { if(b!=null){ this._drawName = b;} return this._drawName; }
+  autoScale() { return this._autoScale; }
 
-  setDrawAt(drawAt) { this._drawAt = drawAt; }
-  setMin(min) { this._min = min; }
+  setMinMax(min=null, max=null) {
+    if(min == null && max == null) return;
+    else if(min != null && max == null){ this._min = min; }
+    else if(min == null && max != null){ this._min = max - this._range; }
+    else{ this._min = min; this._range = max - min; }
+  }
 
-  createTicks(targetCount = 10) {
+  createTicks(targetCount = 6) {
     if (this._range <= 0) return [];
 
     const roughStep = this._range / targetCount;
@@ -56,19 +63,36 @@ class _DataSeries2D {
 
   name() { return this._name; }
   color() { return this._color; }
-  drawPoints() { return this._drawPoints; }
-  drawLines() { return this._drawLines; }
+  drawPoints(b=null) { if(b!=null){ this._drawPoints = b; } return this._drawPoints; }
+  drawLines(b=null) { if(b!=null){ this._drawLines = b; } return this._drawLines; }
   xAxis() { return this._xAxis; }
   yAxis() { return this._yAxis; }
 
   addData(x, y) {
+    for (const [axis, v] of [[this._xAxis, x], [this._yAxis, y]]) {
+      if(axis.autoScale()){
+        if(axis.range() == 0){ axis.setMinMax(v-1e-12, v+1e-12); }
+        else if(v > axis.max()){ axis.setMinMax(axis.min(), v); }
+        else if(v < axis.min()){ axis.setMinMax(v, axis.max()); }
+      }
+    }
     this.x.push(x);
     this.y.push(y);
   }
 
   setData(xArray, yArray) {
-    this.x = xArray.slice();
-    this.y = yArray.slice();
+    this.x = [];
+    this.y = [];
+    for(let i = 0; i < xArray.length; i++) {
+      this.addData(xArray[i], yArray[i]);
+    }
+  }
+
+  delOldX() {
+    while (this.x.length > 1 && this.x[1] < this._xAxis.min()) {
+        this.x.shift();
+        this.y.shift();
+    }
   }
 }
 
@@ -76,16 +100,16 @@ class _DataSeries2D {
 // Plot2D
 // =========================
 class Plot2D {
-  constructor(canvas, heightRatio=0.8, xRange=[0, 10], yRange=[0, 1]) {
+  constructor(canvas, heightRatio=0.8, xRange=[0, 0], yRange=[0, 0], xAxisName="X", yAxisName="Y") {
     this._canvas = canvas;
     this._ctx = canvas.getContext("2d");
     this._dpr = window.devicePixelRatio || 1;
 
     this._viewHeightRatio = heightRatio;
-    this._xAxes = [new _Axis("X", xRange[0], xRange[1], -1)];
-    this._yAxes = [new _Axis("Y", yRange[0], yRange[1], -1)];
-    this._xAxes[0].setDrawAt(this._yAxes[0]);
-    this._yAxes[0].setDrawAt(this._xAxes[0]);
+    this._xAxes = [new _Axis(xAxisName, xRange[0], xRange[1], -1)];
+    this._yAxes = [new _Axis(yAxisName, yRange[0], yRange[1], -1)];
+    this._xAxes[0].drawAt(this._yAxes[0]);
+    this._yAxes[0].drawAt(this._xAxes[0]);
 
     this._seriesList = [];
 
@@ -93,22 +117,25 @@ class Plot2D {
     window.addEventListener("resize", () => this.resize());
   }
 
-  addXAxis(name, min, max, tickLength = undefined, drawAt = undefined) {
-    const a = new _Axis(name, min, max, tickLength, drawAt);
+  addXAxis(name, xRange=[0,0], tickLength = undefined, drawAt = undefined) {
+    const a = new _Axis(name, xRange[0], xRange[1], tickLength, drawAt);
     this._xAxes.push(a);
     return a;
   }
+  getXAxis(i=0){ return this._xAxes[i]; }
 
-  addYAxis(name, min, max, tickLength = undefined, drawAt = undefined) {
-    const a = new _Axis(name, min, max, tickLength, drawAt);
+  addYAxis(name, yRange=[0,0], tickLength = undefined, drawAt = undefined) {
+    const a = new _Axis(name, yRange[0], yRange[1], tickLength, drawAt);
     this._yAxes.push(a);
     return a;
   }
-
-  getSeries(name) {
-    return this._seriesList.find(s => s.name() === name);
+  getYAxis(i=0){ return this._yAxes[i]; }
+  
+  getSeriesNameList() {
+    const series_name_list = [];
+    for(const s of this._seriesList) series_name_list.push(s.name());
+    return series_name_list;
   }
-
   addSeries(name, color, x = null, y = null, drawPoints = true, drawLine = true, xAxis = this._xAxes[0], yAxis = this._yAxes[0]) {
     const s = new _DataSeries2D(name, color, xAxis, yAxis, drawPoints, drawLine);
     if (!y) y = [];
@@ -116,6 +143,9 @@ class Plot2D {
     s.setData(x, y);
     this._seriesList.push(s);
     return s;
+  }
+  getSeries(name) {
+    return this._seriesList.find(s => s.name() === name);
   }
 
   // 高DPI対応リサイズ
@@ -134,13 +164,13 @@ class Plot2D {
     let sx = x;
     if (xAxis) {
       const w = this._canvas.width / this._dpr;
-      sx = (x - xAxis.min()) / xAxis.range() * w;
+      sx = (x - xAxis.min()) / Math.max(xAxis.range(), 1e-12) * w;
     }
 
     let sy = y;
     if (yAxis) {
       const h = this._canvas.height / this._dpr;
-      sy = h - (y - yAxis.min()) / yAxis.range() * h;
+      sy = h - (y - yAxis.min()) / Math.max(yAxis.range(), 1e-12) * h;
     }
 
     return [sx, sy];
@@ -174,7 +204,7 @@ class Plot2D {
     this._ctx.fill();
   }
 
-  _drawAxes(drawAxisName = true) {
+  _drawAxes() {
     const ctx = this._ctx;
     const w = this._canvas.width / this._dpr;
     const h = this._canvas.height / this._dpr;
@@ -256,7 +286,7 @@ class Plot2D {
         
         // 軸ラベル
         let AxisNameXmin = w;
-        if ( drawAxisName ) {
+        if ( xAxis.drawName() ) {
             ctx.font = "bold 12px sans-serif";
             ctx.textAlign = "left";
             AxisNameXmin = w - (5 + ctx.measureText(xAxis.name()).width + 5);
@@ -293,7 +323,7 @@ class Plot2D {
         
         // 軸ラベル
         let AxisNameYmax = 0;
-        if ( drawAxisName ) {
+        if ( yAxis.drawName() ) {
             ctx.font = "bold 12px sans-serif";
             ctx.textBaseline = "bottom";
             const m = ctx.measureText(yAxis.name());
@@ -349,7 +379,7 @@ class Plot2D {
     const boxH = this._seriesList.length * lineHeight + padding * 2;
 
     // 右下配置
-    const x0 = w - boxW - 20;
+    const x0 = w - boxW - 40;
     const y0 = h - boxH - 20;
 
     // 背景
@@ -365,18 +395,9 @@ class Plot2D {
     }
   }
 
-  addData(name, x, y) {
-    let s = this.getSeries(name);
-    if (!s) {
-      s = new _DataSeries2D(name, "red", this._xAxes[0], this._yAxes[0], true, true);
-      this._seriesList.push(s);
-    }
-    s.addData(x, y);
-  }
-
   render() {
     this.clear();
-    this._drawAxes(false);
+    this._drawAxes();
 
     for (const s of this._seriesList) {
       const n = s.x.length;

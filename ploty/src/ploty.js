@@ -209,66 +209,52 @@ class Plot2D {
     const w = this._canvas.width / this._dpr;
     const h = this._canvas.height / this._dpr;
 
-    // X軸の描画Y座標
+    // X軸の描画Y座標, Y軸の描画X座標
     const xAxes_sy = [];
-    for (const xAxis of this._xAxes)
-    {
-      let xaxis_sy;
-      if (xAxis.drawAt() instanceof _Axis) {
-        xaxis_sy = this._toScreen(0, 0, null, xAxis.drawAt())[1];
-      } else if (xAxis.drawAt() < 0) {
-        xaxis_sy = h + xAxis.drawAt();
-      } else {
-        xaxis_sy = xAxis.drawAt();
-      }
-      xaxis_sy = xaxis_sy < 0 ? 0 : (xaxis_sy > h ? h : xaxis_sy);
-      xAxes_sy.push(xaxis_sy);
-    }
-    // Y軸の描画X座標
     const yAxes_sx = [];
-    for (const yAxis of this._yAxes)
-    {
-      let yaxis_sx;
-      if (yAxis.drawAt() instanceof _Axis) {
-        yaxis_sx = this._toScreen(0, 0, yAxis.drawAt(), null)[0];
-      } else if (yAxis.drawAt() < 0) {
-        yaxis_sx = w + yAxis.drawAt();
-      } else {
-        yaxis_sx = yAxis.drawAt();
+    for(const [for_xaxis, pAxes, pAxes_sq, HorW] of [[1, this._xAxes, xAxes_sy, h], [0, this._yAxes, yAxes_sx, w]]) {
+      for (const pAxis of pAxes)
+      {
+        let pAxis_sq;
+        if (pAxis.drawAt() instanceof _Axis) {
+          pAxis_sq = this._toScreen(0, 0, for_xaxis?null:pAxis.drawAt(), for_xaxis?pAxis.drawAt():null)[for_xaxis];
+        } else if (pAxis.drawAt() < 0) {
+          pAxis_sq = HorW + pAxis.drawAt();
+        } else {
+          pAxis_sq = pAxis.drawAt();
+        }
+        pAxis_sq = pAxis_sq < 0 ? 0 : (pAxis_sq > HorW ? HorW : pAxis_sq);
+        pAxes_sq.push(pAxis_sq);
       }
-      yaxis_sx = yaxis_sx < 0 ? 0 : (yaxis_sx > w ? w : yaxis_sx);
-      yAxes_sx.push(yaxis_sx);
     }
 
-    // X軸の目盛り線X座標
+    // X軸の目盛り線X座標, Y軸の目盛り線Y座標
     const xAxes_ticks = []
     const xAxes_ticks_sx = []
-    for (const xAxis of this._xAxes) {
-        const xAxis_ticks = xAxis.createTicks()
-        xAxes_ticks.push(xAxis_ticks)
-        xAxes_ticks_sx.push(xAxis_ticks.map((t) => this._toScreen(t, 0, xAxis, null)[0]));
-    }
-    // Y軸の目盛り線Y座標
     const yAxes_ticks = []
     const yAxes_ticks_sy = []
-    for (const yAxis of this._yAxes) {
-        const yAxis_ticks = yAxis.createTicks()
-        yAxes_ticks.push(yAxis_ticks)
-        yAxes_ticks_sy.push(yAxis_ticks.map((t) => this._toScreen(0, t, null, yAxis)[1]));
+    for (const [for_xaxis, pAxes, pAxes_ticks, pAxes_ticks_sp] of [
+               [1, this._xAxes, xAxes_ticks, xAxes_ticks_sx], 
+               [0, this._yAxes, yAxes_ticks, yAxes_ticks_sy]]) {
+      for (const pAxis of pAxes) {
+        const pAxis_ticks = pAxis.createTicks()
+        pAxes_ticks.push(pAxis_ticks)
+        pAxes_ticks_sp.push(pAxis_ticks.map((t) => 
+          for_xaxis? this._toScreen(t, 0, pAxis, null)[0] : this._toScreen(0, t, null, pAxis)[1]
+        ));
+      }
     }
 
     // 目盛り線
-    for (let i = 0; i < xAxes_ticks_sx.length; i++) {
-        const sy = xAxes_sy[i];
-        const tickLength = this._xAxes[i].tickLength();
-        const [y0, y1] = (tickLength < 0 ? [0, h] : [sy - tickLength, sy + tickLength]);
-        for (const sx of xAxes_ticks_sx[i]) this._drawLine(sx, y0, sx, y1, null, null, "#ccc", 1);
-    }
-    for (let i = 0; i < yAxes_ticks_sy.length; i++) {
-        const sx = yAxes_sx[i];
-        const tickLength = this._yAxes[i].tickLength();
-        const [x0, x1] = (tickLength < 0 ? [0, w] : [sx - tickLength, sx + tickLength])
-        for (const sy of yAxes_ticks_sy[i]) this._drawLine(x0, sy, x1, sy, null, null, "#ccc", 1);
+    for (const [for_x, pAxes, pAxes_sq, pAxes_ticks_sp, HorW] of [
+               [1, this._xAxes, xAxes_sy, xAxes_ticks_sx, h], 
+               [0, this._yAxes, yAxes_sx, yAxes_ticks_sy, w]]){
+      for (let i = 0; i < pAxes_ticks_sp.length; i++) {
+          const sq = pAxes_sq[i];
+          const tickLength = pAxes[i].tickLength();
+          const [q0, q1] = (tickLength < 0 ? [0, HorW] : [sq - tickLength, sq + tickLength]);
+          for (const sp of pAxes_ticks_sp[i]) this._drawLine(for_x?sp:q0, for_x?q0:sp, for_x?sp:q1, for_x?q1:sp, null, null, "#ccc", 1);
+      }
     }
 
     // 軸
@@ -278,79 +264,59 @@ class Plot2D {
     // ラベル
     ctx.fillStyle = "#444";
     const X_TICK_LABEL_MARGIN = 5;
-    for (let i = 0; i < xAxes_sy.length; i++) {
-        const xAxis = this._xAxes[i];
-        const sy = xAxes_sy[i];
-        const label_sy = (sy < h / 2 ? sy + 6 : sy - 6);
-        ctx.textBaseline = (sy < h / 2 ? "top" : "bottom");
+    const Y_TICK_LABEL_MARGIN = 6;
+    for (const [for_xaxis, pAxes, pAxes_sq, qAxes_sp, pAxes_ticks, pAxes_ticks_sp, LABEL_MARGIN, HorW] of [
+               [1, this._xAxes, xAxes_sy, yAxes_sx, xAxes_ticks, xAxes_ticks_sx, X_TICK_LABEL_MARGIN, h], 
+               [0, this._yAxes, yAxes_sx, xAxes_sy, yAxes_ticks, yAxes_ticks_sy, Y_TICK_LABEL_MARGIN, w]]) {
+      for (let i = 0; i < pAxes_sq.length; i++) {
+        const pAxis = pAxes[i];
+        const sq = pAxes_sq[i];
+        const label_sq = (sq < HorW / 2 ? sq + 6 : sq - 6);
+        if (for_xaxis)
+          ctx.textBaseline = (sq < h / 2 ? "top" : "bottom");
+        else
+          ctx.textAlign = (sq > w / 2 ? "right" : "left");
         
         // 軸ラベル
-        let AxisNameXmin = w;
-        if ( xAxis.drawName() ) {
+        let AxisNameXminOrYmax = for_xaxis? w : 0;
+        if ( pAxis.drawName() ) {
             ctx.font = "bold 12px sans-serif";
-            ctx.textAlign = "left";
-            AxisNameXmin = w - (5 + ctx.measureText(xAxis.name()).width + 5);
-            ctx.fillText(xAxis.name(), AxisNameXmin + 5, label_sy);
+            if (for_xaxis) {
+              ctx.textAlign = "left";
+              AxisNameXminOrYmax = w - (5 + ctx.measureText(pAxis.name()).width + 5);
+              ctx.fillText(pAxis.name(), AxisNameXminOrYmax + 5, label_sq);
+            } else {
+              ctx.textBaseline = "bottom";
+              const m = ctx.measureText(pAxis.name());
+              AxisNameXminOrYmax = 5 + (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent) + 5;
+              ctx.fillText(pAxis.name(), label_sq, AxisNameXminOrYmax - 5);
+            }
         }
 
         // 目盛りラベル
         ctx.font = "12px sans-serif";
-        ctx.textAlign = "center";
-        for (let j = 0; j < xAxes_ticks[i].length; j++) {
-            const t = xAxes_ticks[i][j];
-            const sx = xAxes_ticks_sx[i][j];
+        if (for_xaxis)
+          ctx.textAlign = "center";
+        else
+          ctx.textBaseline = "middle";
+        for (let j = 0; j < pAxes_ticks[i].length; j++) {
+            const t = pAxes_ticks[i][j];
+            const sp = pAxes_ticks_sp[i][j];
 
             // 端すぎたり、Y軸や軸ラベルと被る目盛りラベルは描画しない
             let skip = false;
-            if (sx < X_TICK_LABEL_MARGIN) continue;
-            if (sx > AxisNameXmin - X_TICK_LABEL_MARGIN) continue;
-            for (const yaxis_sx of yAxes_sx) {
-              if (sx >= yaxis_sx - X_TICK_LABEL_MARGIN && sx <= yaxis_sx + X_TICK_LABEL_MARGIN) { skip = true; break; }
+            if (sp < (for_xaxis? 0 : AxisNameXminOrYmax) + LABEL_MARGIN) continue;
+            if (sp > (for_xaxis? AxisNameXminOrYmax : h) - LABEL_MARGIN) continue;
+            for (const qaxis_sp of qAxes_sp) {
+              if (sp >= qaxis_sp - LABEL_MARGIN && sp <= qaxis_sp + LABEL_MARGIN) { skip = true; break; }
             }
             if (skip) continue;
 
             let t_ = Number(t.toFixed(12));
             let label = t_.toString(); if (label.length >= 7) label = t_.toExponential(2);
-            ctx.fillText(label, sx, label_sy);
+            ctx.fillText(label, for_xaxis?sp:label_sq, for_xaxis?label_sq:sp);
         }
-    }
-    const Y_TICK_LABEL_MARGIN = 6
-    for (let i = 0; i < yAxes_sx.length; i++) {
-        const yAxis = this._yAxes[i];
-        const sx = yAxes_sx[i];
-        const label_sx = (sx > w / 2 ? sx - 6 : sx + 6);
-        ctx.textAlign = (sx > w / 2 ? "right" : "left");
-        
-        // 軸ラベル
-        let AxisNameYmax = 0;
-        if ( yAxis.drawName() ) {
-            ctx.font = "bold 12px sans-serif";
-            ctx.textBaseline = "bottom";
-            const m = ctx.measureText(yAxis.name());
-            AxisNameYmax = 5 + (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent) + 5;
-            ctx.fillText(yAxis.name(), label_sx, AxisNameYmax - 5);
-        }
-
-        // 目盛りラベル
-        ctx.font = "12px sans-serif";
-        ctx.textBaseline = "middle";
-        for (let j = 0; j < yAxes_ticks[i].length; j++) {
-            const t = yAxes_ticks[i][j];
-            const sy = yAxes_ticks_sy[i][j];
-  
-            // 端すぎたり、Y軸や軸ラベルと被る目盛りラベルは描画しない
-            let skip = false;
-            if (sy < AxisNameYmax + Y_TICK_LABEL_MARGIN) continue;
-            if (sy > h - Y_TICK_LABEL_MARGIN) continue;
-            for(const xaxis_sy of xAxes_sy) {
-                if (sy >= xaxis_sy - Y_TICK_LABEL_MARGIN && sy <= xaxis_sy + Y_TICK_LABEL_MARGIN) { skip = true; break; }
-            }
-            if (skip) continue;
-  
-            let t_ = Number(t.toFixed(12));
-            let label = t_.toString(); if (label.length >= 7) label = t_.toExponential(2);
-            ctx.fillText(label, label_sx, sy);
-        }
+      }
     }
   }
 

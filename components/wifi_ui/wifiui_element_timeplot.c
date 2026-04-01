@@ -53,7 +53,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
 
             "let time0_sec = NaN;" // ESP時刻が0秒のときのページ時刻
             "const canvas = document.getElementById(plot_id);"
-            "const plot = new Plot2D(canvas, heightRatio=0.8, FIXED_YRANGE, [-TIME_WINDOW, 0]);"
+            "const plot = new Plot2D(canvas, heightRatio=0.8, [-TIME_WINDOW, 0], FIXED_YRANGE);"
             "const xaxis2 = plot.addXAxis('abs_t', -TIME_WINDOW, 0, undefined, 0);"
             "// %s\n"// TODO: Y軸に命名
             

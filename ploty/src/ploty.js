@@ -76,7 +76,7 @@ class _DataSeries2D {
 // Plot2D
 // =========================
 class Plot2D {
-  constructor(canvas, heightRatio=0.8, yRange=[0, 1], xRange=[0, 10]) {
+  constructor(canvas, heightRatio=0.8, xRange=[0, 10], yRange=[0, 1]) {
     this._canvas = canvas;
     this._ctx = canvas.getContext("2d");
     this._dpr = window.devicePixelRatio || 1;

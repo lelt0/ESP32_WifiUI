@@ -114,7 +114,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
         "}"
         "</script>"
         , self_plot->common.id_str, self_plot->common.id_str
-        , self_plot->y_min, self_plot->y_max, self_plot->x_min, self_plot->x_max
+        , self_plot->x_min, self_plot->x_max, self_plot->y_min, self_plot->y_max
         , self_plot->x_label, self_plot->y_label
         , self_plot->x_auto_scale?"true":"false", self_plot->y_auto_scale?"true":"false"
         , self_plot->common.id

@@ -443,7 +443,7 @@ class _DataSeries3D {
 // Plot3D
 // =========================
 class Plot3D {
-  constructor(canvas, viewHeightRatio=1.0, xRange=[0, 0], yRange=[0, 0], zRange=[0, 0]) {
+  constructor(canvas, viewHeightRatio=1.0, xRange=[0, 0], yRange=[0, 0], zRange=[0, 0], axisScale=[1.0, 1.0, 1.0]) {
     this._canvas = canvas;
     this._ctx = canvas.getContext("2d");
     this._dpr = window.devicePixelRatio || 1;
@@ -452,6 +452,7 @@ class Plot3D {
     this._xAxis = new _Axis("X", xRange[0], xRange[1]);
     this._yAxis = new _Axis("Y", yRange[0], yRange[1]);
     this._zAxis = new _Axis("Z", zRange[0], zRange[1]);
+    this._axisScale = axisScale;
 
     this._yaw = -Math.PI / 4;
     this._pitch = -Math.PI / 4;
@@ -555,14 +556,15 @@ class Plot3D {
   }
 
   _project(x, y, z) {
-    const xr = Math.max(this._xAxis.range(), 1e-12);
-    const yr = Math.max(this._yAxis.range(), 1e-12);
-    const zr = Math.max(this._zAxis.range(), 1e-12);
+    const scaled_xrange = this._xAxis.range() * this._axisScale[0];
+    const scaled_yrange = this._yAxis.range() * this._axisScale[1];
+    const scaled_zrange = this._zAxis.range() * this._axisScale[2];
+    const maxRange = Math.max(scaled_xrange, scaled_yrange, scaled_zrange, 1e-12);
 
-    // Box中心で正規化
-    const nx = 2 * (x - this._xAxis.min()) / xr - 1;
-    const ny = 2 * (y - this._yAxis.min()) / yr - 1;
-    const nz = 2 * (z - this._zAxis.min()) / zr - 1;
+    // 軸Box中心、最大の軸範囲が[-1,1]になるように正規化
+    const nx = (2 * (x - this._xAxis.min()) - this._xAxis.range()) * this._axisScale[0] / maxRange;
+    const ny = (2 * (y - this._yAxis.min()) - this._yAxis.range()) * this._axisScale[1] / maxRange;
+    const nz = (2 * (z - this._zAxis.min()) - this._zAxis.range()) * this._axisScale[2] / maxRange;
 
     const cy = Math.cos(this._yaw);
     const sy = Math.sin(this._yaw);

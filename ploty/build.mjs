@@ -30,3 +30,10 @@ writeFileSync("dist/ploty.min.js", result.code);
 // gzip化
 const gz = gzipSync(result.code, { level: 9 });
 writeFileSync("dist/ploty.min.js.gz", gz);
+
+// ESP32コンポーネント側へコピー
+mkdirSync("../components/wifi_ui/assets", { recursive: true });
+copyFileSync(
+  "dist/ploty.min.js.gz",
+  "../components/wifi_ui/assets/ploty.min.js.gz"
+);

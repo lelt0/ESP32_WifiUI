@@ -412,7 +412,7 @@ esp_err_t ploty_js_get_handler(httpd_req_t *req)
     const size_t len = ploty_min_js_gz_end - ploty_min_js_gz_start;
     httpd_resp_set_type(req, "application/javascript");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-    httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=31536000");
+    httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=86400");
     httpd_resp_send(req, (const char *)ploty_min_js_gz_start, len);
     return ESP_OK;
 }

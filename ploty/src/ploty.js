@@ -69,11 +69,11 @@ class _DataSeries2D {
   yAxis() { return this._yAxis; }
 
   addData(x, y) {
-    for (const [axis, v] of [[this._xAxis, x], [this._yAxis, y]]) {
-      if(axis.autoScale()){
-        if(axis.range() == 0){ axis.setMinMax(v-1e-12, v+1e-12); }
-        else if(v > axis.max()){ axis.setMinMax(axis.min(), v); }
-        else if(v < axis.min()){ axis.setMinMax(v, axis.max()); }
+    for (const [pAxis, p] of [[this._xAxis, x], [this._yAxis, y]]) {
+      if(pAxis.autoScale()){
+        if(pAxis.range() == 0){ pAxis.setMinMax(p-1e-12, p+1e-12); }
+        else if(p > pAxis.max()){ pAxis.setMinMax(pAxis.min(), p); }
+        else if(p < pAxis.min()){ pAxis.setMinMax(p, pAxis.max()); }
       }
     }
     this.x.push(x);
@@ -136,17 +136,18 @@ class Plot2D {
     for(const s of this._seriesList) series_name_list.push(s.name());
     return series_name_list;
   }
-  addSeries(name, color, x = null, y = null, drawPoints = true, drawLine = true, xAxis = this._xAxes[0], yAxis = this._yAxes[0]) {
+  addSeries(name, color, xArray = null, yArray = null, drawPoints = true, drawLine = true, xAxis = this._xAxes[0], yAxis = this._yAxes[0]) {
     const s = new _DataSeries2D(name, color, xAxis, yAxis, drawPoints, drawLine);
-    if (!y) y = [];
-    if (!x) x = [...Array(y.length).keys()];
-    s.setData(x, y);
+    if (!yArray) yArray = [];
+    if (!xArray) xArray = [...Array(yArray.length).keys()];
+    s.setData(xArray, yArray);
     this._seriesList.push(s);
     return s;
   }
   getSeries(name) {
     return this._seriesList.find(s => s.name() === name);
   }
+  clearSeries() { this._seriesList = []; }
 
   // 高DPI対応リサイズ
   resize() {
@@ -386,5 +387,311 @@ class Plot2D {
     this._drawLegend();
   }
 }
-
 window.Plot2D = Plot2D;
+
+// =========================
+// DataSeries3D
+// =========================
+class _DataSeries3D {
+  constructor(name, xAxis, yAxis, zAxis) {
+    this._name = name;
+    this._xAxis = xAxis;
+    this._yAxis = yAxis;
+    this._zAxis = zAxis;
+    this._drawPoints = true;
+    this._drawLines = false; // note: 予約
+
+    this.x = [];
+    this.y = [];
+    this.z = [];
+    this.colors = [];
+  }
+
+  name() { return this._name; }
+  xAxis() { return this._xAxis; }
+  yAxis() { return this._yAxis; }
+  zAxis() { return this._zAxis; }
+  drawPoints(b=null) { if(b!=null){ this._drawPoints = b; } return this._drawPoints; }
+  drawLines(b=null) { if(b!=null){ this._drawLines = b; } return this._drawLines; }
+
+  addData(x, y, z, color) {
+    for (const [pAxis, p] of [[this._xAxis, x], [this._yAxis, y], [this._zAxis, z]]) {
+      if(pAxis.autoScale()){
+        if(pAxis.range() == 0){ pAxis.setMinMax(p-1e-12, p+1e-12); }
+        else if(p > pAxis.max()){ pAxis.setMinMax(pAxis.min(), p); }
+        else if(p < pAxis.min()){ pAxis.setMinMax(p, pAxis.max()); }
+      }
+    }
+    this.x.push(x);
+    this.y.push(y);
+    this.z.push(z);
+    this.colors.push(color);
+  }
+
+  setData(xArray, yArray, zArray, colorArray) {
+    this.x = [];
+    this.y = [];
+    this.z = [];
+    this.colors = [];
+    for(let i = 0; i < xArray.length; i++) {
+      this.addData(xArray[i], yArray[i], zArray[i], colorArray[i]);
+    }
+  }
+}
+
+// =========================
+// Plot3D
+// =========================
+class Plot3D {
+  constructor(canvas, viewHeightRatio=1.0, xRange=[0, 0], yRange=[0, 0], zRange=[0, 0]) {
+    this._canvas = canvas;
+    this._ctx = canvas.getContext("2d");
+    this._dpr = window.devicePixelRatio || 1;
+
+    this._viewHeightRatio = viewHeightRatio;
+    this._xAxis = new _Axis("X", xRange[0], xRange[1]);
+    this._yAxis = new _Axis("Y", yRange[0], yRange[1]);
+    this._zAxis = new _Axis("Z", zRange[0], zRange[1]);
+
+    this._yaw = -Math.PI / 4;
+    this._pitch = -Math.PI / 4;
+    this._zoom = 0.9;
+    this._panX = 0;
+    this._panY = 0;
+
+    this._dragMode = null;
+    this._lastPointerX = 0;
+    this._lastPointerY = 0;
+
+    this._seriesList = [];
+
+    this.resize();
+    window.addEventListener("resize", () => this.resize());
+
+    this._canvas.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      this._lastPointerX = e.clientX;
+      this._lastPointerY = e.clientY;
+
+      if (e.button === 1) this._dragMode = "pan";
+      else this._dragMode = "rotate";
+    });
+
+    window.addEventListener("pointermove", (e) => {
+      if (!this._dragMode) return;
+
+      const dx = e.clientX - this._lastPointerX;
+      const dy = e.clientY - this._lastPointerY;
+
+      this._lastPointerX = e.clientX;
+      this._lastPointerY = e.clientY;
+
+      if (this._dragMode === "rotate") {
+        this._yaw += dx * 0.01;
+        this._pitch -= dy * 0.01;
+
+        const limit = Math.PI / 2 - 0.01;
+        if (this._pitch > limit) this._pitch = limit;
+        if (this._pitch < -limit) this._pitch = -limit;
+      } else if (this._dragMode === "pan") {
+        this._panX += dx;
+        this._panY += dy;
+      }
+
+      this.render();
+    });
+
+    window.addEventListener("pointerup", () => {
+      this._dragMode = null;
+    });
+
+    this._canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      this._zoom *= (e.deltaY > 0 ? 0.9 : 1.1);
+      this._zoom = Math.max(0.1, Math.min(10, this._zoom));
+      this.render();
+    }, { passive: false });
+
+    this._canvas.addEventListener("dblclick", () => {
+      this._yaw = -Math.PI / 4;
+      this._pitch = -Math.PI / 4;
+      this._zoom = 0.9;
+      this._panX = 0;
+      this._panY = 0;
+      this.render();
+    });
+
+    this._canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+
+  getSeriesNameList() {
+    const series_name_list = [];
+    for(const s of this._seriesList) series_name_list.push(s.name());
+    return series_name_list;
+  }
+
+  addSeries(name, xArray, yArray, zArray, colorArray) {
+    const s = new _DataSeries3D(name, this._xAxis, this._yAxis, this._zAxis);
+    s.setData(xArray, yArray, zArray, colorArray);
+    this._seriesList.push(s);
+    return s;
+  }
+
+  getSeries(name) {
+    return this._seriesList.find(s => s.name() === name);
+  }
+
+  clearSeries() { this._seriesList = []; }
+
+  resize() {
+    const rect = this._canvas.getBoundingClientRect();
+
+    this._canvas.width = rect.width * this._dpr;
+    this._canvas.height = rect.width * this._dpr * this._viewHeightRatio;
+
+    this._ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
+
+    this.render();
+  }
+
+  _project(x, y, z) {
+    const xr = Math.max(this._xAxis.range(), 1e-12);
+    const yr = Math.max(this._yAxis.range(), 1e-12);
+    const zr = Math.max(this._zAxis.range(), 1e-12);
+
+    // Box中心で正規化
+    const nx = 2 * (x - this._xAxis.min()) / xr - 1;
+    const ny = 2 * (y - this._yAxis.min()) / yr - 1;
+    const nz = 2 * (z - this._zAxis.min()) / zr - 1;
+
+    const cy = Math.cos(this._yaw);
+    const sy = Math.sin(this._yaw);
+    const cp = Math.cos(this._pitch);
+    const sp = Math.sin(this._pitch);
+
+    // yaw: Z軸周りに回転
+    const x1 = cy * nx - sy * ny;
+    const y1 = sy * nx + cy * ny;
+
+    // pitch: X軸周りに回転
+    const z2 = cp * nz - sp * y1;
+    const y2 = sp * nz + cp * y1;
+
+    return [x1, z2, y2];
+  }
+
+  _toScreenP(px, py) {
+    const w = this._canvas.width / this._dpr;
+    const h = this._canvas.height / this._dpr;
+
+    const scale = Math.min(w, h) * 0.35 * this._zoom;
+    const sx = w / 2 + this._panX + px * scale;
+    const sy = h / 2 + this._panY - py * scale;
+
+    return [sx, sy];
+  }
+
+  clear() {
+    const w = this._canvas.width / this._dpr;
+    const h = this._canvas.height / this._dpr;
+    this._ctx.clearRect(0, 0, w, h);
+  }
+
+  _drawLineP(px1, py1, px2, py2, color = "#888", width = 1) {
+    const [sx1, sy1] = this._toScreenP(px1, py1);
+    const [sx2, sy2] = this._toScreenP(px2, py2);
+
+    this._ctx.beginPath();
+    this._ctx.moveTo(sx1, sy1);
+    this._ctx.lineTo(sx2, sy2);
+    this._ctx.strokeStyle = color;
+    this._ctx.lineWidth = width;
+    this._ctx.stroke();
+  }
+
+  _drawPointP(px, py, r = 4, color = "red") {
+    const [sx, sy] = this._toScreenP(px, py);
+
+    this._ctx.beginPath();
+    this._ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    this._ctx.fillStyle = color;
+    this._ctx.fill();
+  }
+
+  _drawAxes(behind = false) {
+
+    const originProj = this._project(this._xAxis.min(), this._yAxis.min(), this._zAxis.min());
+    const drawAxesBehind = (originProj[2] < 0);
+    if (!(behind ^ drawAxesBehind)) return;
+
+    const xMaxProj = this._project(this._xAxis.max(), this._yAxis.min(), this._zAxis.min());
+    const yMaxProj = this._project(this._xAxis.min(), this._yAxis.max(), this._zAxis.min());
+    const zMaxProj = this._project(this._xAxis.min(), this._yAxis.min(), this._zAxis.max());
+    const axes = [
+      { axis: this._xAxis, color: "#D55", maxProj: xMaxProj },
+      { axis: this._yAxis, color: "#5A5", maxProj: yMaxProj },
+      { axis: this._zAxis, color: "#55D", maxProj: zMaxProj }
+    ];
+
+    const ctx = this._ctx;
+    const axisColor = "#888";
+    const labelColor = "#444";
+
+    for (const a of axes) {
+      this._drawLineP(originProj[0], originProj[1], a.maxProj[0], a.maxProj[1], axisColor, 2);
+
+      const ticks = a.axis.createTicks();
+      ctx.fillStyle = labelColor;
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      for (const t of ticks) {
+        let tx, ty, tz;
+        if (a.axis === this._xAxis) [tx, ty, tz] = [t, this._yAxis.min(), this._zAxis.min()];
+        if (a.axis === this._yAxis) [tx, ty, tz] = [this._xAxis.min(), t, this._zAxis.min()];
+        if (a.axis === this._zAxis) [tx, ty, tz] = [this._xAxis.min(), this._yAxis.min(), t];
+
+        const pt = this._project(tx, ty, tz);
+        this._drawPointP(pt[0], pt[1], 2, a.color);
+
+        const [sx, sy] = this._toScreenP(pt[0], pt[1]);
+        let label = Number(t.toFixed(12)).toString();
+        if (label.length >= 7) label = Number(t).toExponential(2);
+        ctx.fillText(label, sx + 6, sy - 6);
+      }
+
+      const [sx, sy] = this._toScreenP(a.maxProj[0], a.maxProj[1]);
+      ctx.fillStyle = a.color;
+      ctx.font = "bold 14px sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(a.axis.name(), sx + 16, sy);
+    }
+  }
+
+  render() {
+    this.clear();
+    this._drawAxes(true);
+
+    const pointsProj = [];
+    for (const s of this._seriesList) {
+      if (!s.drawPoints()) continue;
+      for (let i = 0; i < s.x.length; i++) {
+        const [px, py, pz] = this._project(s.x[i], s.y[i], s.z[i]);
+        pointsProj.push({ px: px, py: py, pz: pz, color: s.colors[i] });
+      }
+    }
+    if (pointsProj.length > 0) {
+      pointsProj.sort((a, b) => b.pz - a.pz);
+
+      const min_pz = pointsProj.at(-1).pz;
+      const max_pz = pointsProj.at(0).pz;
+      for (const p of pointsProj) {
+        this._drawPointP(p.px, p.py, 4 - 2 * (p.pz - min_pz) / (max_pz - min_pz), p.color);
+      }
+    }
+
+    this._drawAxes(false);
+  }
+}
+window.Plot3D = Plot3D;

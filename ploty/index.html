@@ -25,6 +25,7 @@ img, video { display: block;
 canvas { display: block; 
   margin: 10px auto; width: 100%; height: auto;
   background: #fff; border: 1px solid #eee;
+  touch-action: none;
 }
 
 .inline { display: inline-block;
@@ -46,7 +47,7 @@ canvas { display: block;
 <script src="src/ploty.js"></script>
 <script>
 // =========================
-// 使用例
+// Plot2D使用例
 // =========================
 const canvas = document.getElementById("graph");
 const plot = new Plot2D(canvas, 0.8, [0,0], [0,0]);
@@ -75,6 +76,32 @@ document.getElementById("addPoint").addEventListener("click", () => {
   plot.getSeries("dummy2").delOldX();
   plot.render();
 });
+</script>
+
+<div class="container">
+  <canvas id="graph3d"></canvas>
+</div>
+<script>
+// =========================
+// Plot3D使用例
+// =========================
+const canvas3d = document.getElementById("graph3d");
+const plot3d = new Plot3D(canvas3d, 1.0, [-1,1], [-1,1], [0,0]);
+for(let y = -1; y <= 1.0001; y += 0.05) {
+  const xs = [];
+  const ys = [];
+  const zs = [];
+  const colors = [];
+  for(let x = -1; x <= 1.0001; x += 0.05) {
+    xs.push(x);
+    ys.push(y);
+    zs.push(x * x - y * y);
+    const hue = ((y + 1) / 2) * 240;
+    colors.push(`hsl(${hue}, 80%, 50%)`);
+  }
+  plot3d.addSeries(`y=${y.toFixed(2)}`, xs, ys, zs, colors);
+}
+plot3d.render();
 </script>
 
 </body>

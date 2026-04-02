@@ -12,7 +12,7 @@ struct wifiui_element_timeplot {
     wifiui_element_t common;
     uint8_t series_count;
     char** series_names;
-    char** series_colors;
+    const char** series_colors;
     const char* y_label;
     bool y_auto_scale;
     float y_min;

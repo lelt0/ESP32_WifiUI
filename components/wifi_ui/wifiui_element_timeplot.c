@@ -19,11 +19,11 @@ const wifiui_element_timeplot_t * wifiui_element_timeplot(
     self->common.system.use_ploty = true;
 
     self->series_count = series_count;
-    self->series_names = (char**)malloc(sizeof(char*) * series_count);
-    self->series_colors = (char**)malloc(sizeof(char*) * series_count);
+    self->series_names = malloc(sizeof(char*) * series_count);
+    self->series_colors = malloc(sizeof(const char*) * series_count);
     for(uint8_t i = 0; i < series_count; i++) {
         self->series_names[i] = strdup(series_names[i]);
-        self->series_colors[i] = COLORS[i % sizeof(COLORS)];
+        self->series_colors[i] = COLORS[i % (sizeof(COLORS) / sizeof(COLORS[0]))];
     }
     self->y_label = strdup(y_label);
     self->y_auto_scale = (y_min >= y_max);
@@ -39,7 +39,7 @@ const wifiui_element_timeplot_t * wifiui_element_timeplot(
 dstring_t* create_partial_html(const wifiui_element_t* self)
 {
     wifiui_element_timeplot_t* self_plot = (wifiui_element_timeplot_t*)self;
-    dstring_t* series_names = dstring_create_json_list(self_plot->series_names, self_plot->series_count, 8);
+    dstring_t* series_names = dstring_create_json_list((const char* const*)self_plot->series_names, self_plot->series_count, 8);
     dstring_t* series_colors = dstring_create_json_list(self_plot->series_colors, self_plot->series_count, 8);
     dstring_t* html = dstring_create(1024);
     dstring_appendf(html, 

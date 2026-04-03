@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <head>
 <meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Graph2D Responsive</title>
 <style>
 * { box-sizing: border-box; }
@@ -25,7 +28,6 @@ img, video { display: block;
 canvas { display: block; 
   margin: 10px auto; width: 100%; height: auto;
   background: #fff; border: 1px solid #eee;
-  touch-action: none;
 }
 
 .inline { display: inline-block;
@@ -38,6 +40,7 @@ canvas { display: block;
 <h1>はじめに</h1>
 <h2>第1章</h2>
 <p>The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.</p>
+<div id="debug_text">--</div>
 
 <button id="addPoint">点を追加</button>
 <div class="container">

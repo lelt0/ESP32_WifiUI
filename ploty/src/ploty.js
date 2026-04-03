@@ -454,75 +454,106 @@ class Plot3D {
     this._zAxis = new _Axis("Z", zRange[0], zRange[1]);
     this._axisScale = axisScale;
 
+    this._seriesList = [];
+
     this._yaw = -Math.PI / 4;
     this._pitch = -Math.PI / 4;
     this._zoom = 0.9;
     this._panX = 0;
     this._panY = 0;
 
-    this._dragMode = null;
-    this._lastPointerX = 0;
-    this._lastPointerY = 0;
-
-    this._seriesList = [];
-
+    this._resetView();
     this.resize();
+    this.render();
     window.addEventListener("resize", () => this.resize());
 
-    this._canvas.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      this._lastPointerX = e.clientX;
-      this._lastPointerY = e.clientY;
-
-      if (e.button === 1) this._dragMode = "pan";
-      else this._dragMode = "rotate";
-    });
-
-    window.addEventListener("pointermove", (e) => {
-      if (!this._dragMode) return;
-
-      const dx = e.clientX - this._lastPointerX;
-      const dy = e.clientY - this._lastPointerY;
-
-      this._lastPointerX = e.clientX;
-      this._lastPointerY = e.clientY;
-
-      if (this._dragMode === "rotate") {
-        this._yaw += dx * 0.01;
-        this._pitch -= dy * 0.01;
-
-        const limit = Math.PI / 2 - 0.01;
-        if (this._pitch > limit) this._pitch = limit;
-        if (this._pitch < -limit) this._pitch = -limit;
-      } else if (this._dragMode === "pan") {
-        this._panX += dx;
-        this._panY += dy;
-      }
-
-      this.render();
-    });
-
-    window.addEventListener("pointerup", () => {
-      this._dragMode = null;
-    });
-
-    this._canvas.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      this._zoom *= (e.deltaY > 0 ? 0.9 : 1.1);
+    this._lastPointerX = null;
+    this._lastPointerY = null;
+    this._startZoomScale = null;
+    const dxdy = (x,y) => {
+        const dx = this._lastPointerX !== null ? x - this._lastPointerX : 0;
+        const dy = this._lastPointerY !== null ? y - this._lastPointerY : 0;
+        this._lastPointerX = x;
+        this._lastPointerY = y;
+        return [dx, dy];
+    };
+    const rotate = (d_yaw, d_pitch) => {
+      this._yaw += d_yaw;
+      this._pitch += d_pitch;
+      const limit = Math.PI / 2 - 0.01;
+      if (this._pitch > limit) this._pitch = limit;
+      if (this._pitch < -limit) this._pitch = -limit;
+    };
+    const zoom = (scale) => {
+      this._zoom = scale;
       this._zoom = Math.max(0.1, Math.min(10, this._zoom));
-      this.render();
-    }, { passive: false });
+    };
 
-    this._canvas.addEventListener("dblclick", () => {
+    this._canvas.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === 'touch') return;
+      e.preventDefault(); // ブラウザ機能を抑制
+      this._canvas.setPointerCapture(e.pointerId); // マウスがcanvas外に出てもドラッグ継続
+    });
+    this._canvas.addEventListener("pointermove", (e) => {
+      if (e.pointerType === 'touch') return;
+      if (e.buttons) {
+        e.preventDefault();
+        const [dx, dy] = dxdy(e.clientX, e.clientY);
+        if (e.buttons & 1) { rotate(dx * 0.01, -dy * 0.01); }
+        if (e.buttons & 4) { this._panX += dx; this._panY += dy; }
+        if (e.buttons & 2) { zoom(this._zoom * (dy > 0 || dx < 0 ? 0.98 : 1.02)); }
+        this.render();
+      }
+    });
+    this._canvas.addEventListener("pointerup", (e) => {
+      if (e.pointerType === 'touch') return;
+      e.preventDefault();
+      dxdy(null, null);
+      this._canvas.releasePointerCapture(e.pointerId);
+    });
+    // this._canvas.addEventListener("wheel", (e) => {
+    //   e.preventDefault();
+    //   zoom(this._zoom * (e.deltaY > 0 ? 0.9 : 1.1));
+    //   this.render();
+    // }, { passive: false });
+    this._canvas.addEventListener("dblclick", () => { this._resetView(); this.render(); });
+    this._canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length == 1) {
+        e.preventDefault();
+        const [dx, dy] = dxdy(e.touches[0].clientX, e.touches[0].clientY);
+        rotate(dx * 0.01, -dy * 0.01);
+        this.render();
+      }
+      if (e.touches.length == 2) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const centerX = (t1.clientX + t2.clientX) / 2;
+        const centerY = (t1.clientY + t2.clientY) / 2;
+        const pointersDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        if (this._startZoomScale == null) {
+          dxdy(centerX, centerY);
+          this._startZoomScale = this._zoom / pointersDist;
+        }
+        const [dx, dy] = dxdy(centerX, centerY);
+        this._panX += dx; this._panY += dy;
+        zoom(pointersDist * this._startZoomScale);
+        this.render();
+      }
+    }, { passive: false });
+    this._canvas.addEventListener('touchend', (e) => {
+      dxdy(null, null);
+      this._startZoomScale = null;
+    });
+    this._canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+
+  _resetView() {
       this._yaw = -Math.PI / 4;
       this._pitch = -Math.PI / 4;
       this._zoom = 0.9;
       this._panX = 0;
       this._panY = 0;
-      this.render();
-    });
-
-    this._canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
   getSeriesNameList() {

@@ -113,11 +113,19 @@ class Plot {
   
   // 高DPI対応リサイズ
   resize() {
-    const rect = this._canvas.getBoundingClientRect();
+    const parentWidth = this._canvas.parentElement.clientWidth;
+    const maxHeight = window.innerHeight * 0.9; // Plot高さはウィンドウ高さの90%以下に制限
 
-    this._canvas.width = rect.width * this._dpr;
-    this._canvas.height = rect.width * this._dpr * this._viewHeightRatio;
-
+    let cssWidth  = parentWidth;
+    let cssHeight  = cssWidth * this._viewHeightRatio;
+    if (cssHeight > maxHeight) {
+      cssWidth = maxHeight / this._viewHeightRatio;
+      cssHeight = maxHeight;
+    }
+    this._canvas.style.width = cssWidth + 'px';
+    this._canvas.style.height = cssHeight + 'px';
+    this._canvas.width = cssWidth * this._dpr;
+    this._canvas.height = cssHeight * this._dpr;
     this._ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
 
     this.render();

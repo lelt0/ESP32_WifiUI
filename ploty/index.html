@@ -24,9 +24,8 @@ button:hover { background: #005fcc; }
 img, video { display: block; 
   margin: 1em auto; max-width: 100%; max-height: 100vh; }
 
-.container { width: 100%; margin: 0 auto; }
-canvas { display: block; 
-  margin: 10px auto; width: 100%; height: auto;
+.plot_container canvas { display: block; 
+  margin: 1em auto; 
   background: #fff; border: 1px solid #eee;
 }
 
@@ -44,8 +43,8 @@ canvas { display: block;
 <div id="debug_text">--</div>
 
 <button id="addPoint">点を追加</button>
-<div class="container">
-  <canvas id="graph"></canvas>
+<div class="plot_container">
+  <canvas id="plot2d"></canvas>
 </div>
 
 <script src="src/ploty.js"></script>
@@ -53,7 +52,7 @@ canvas { display: block;
 // =========================
 // Plot2D使用例
 // =========================
-const canvas = document.getElementById("graph");
+const canvas = document.getElementById("plot2d");
 const plot = new Plot2D(canvas, 0.5, [0,0], [0,0]);
 const axis_2nd = plot.addXAxis("X1 [ticks]", [-1.6, 8.6], undefined, 0);
 axis_2nd.drawName(true);
@@ -82,14 +81,14 @@ document.getElementById("addPoint").addEventListener("click", () => {
 });
 </script>
 
-<div class="container">
-  <canvas id="graph3d"></canvas>
+<div class="plot_container">
+  <canvas id="plot3d"></canvas>
 </div>
 <script>
 // =========================
 // Plot3D使用例
 // =========================
-const canvas3d = document.getElementById("graph3d");
+const canvas3d = document.getElementById("plot3d");
 const plot3d = new Plot3D(canvas3d, 1.0, [-1,1], [-1,1], [0,0]);
 for(let y = -1; y <= 1.0001; y += 0.05) {
   const xs = [];

@@ -99,22 +99,57 @@ class _DataSeries2D {
 // =========================
 // Plot2D
 // =========================
-class Plot2D {
-  constructor(canvas, heightRatio=0.8, xRange=[0, 0], yRange=[0, 0], xAxisName="X", yAxisName="Y") {
+class Plot {
+  constructor(canvas, heightRatio=0.8) {
     this._canvas = canvas;
     this._ctx = canvas.getContext("2d");
     this._dpr = window.devicePixelRatio || 1;
-
     this._viewHeightRatio = heightRatio;
+
+    this._seriesList = [];
+
+    window.addEventListener("resize", () => this.resize());
+  }
+  
+  // 高DPI対応リサイズ
+  resize() {
+    const rect = this._canvas.getBoundingClientRect();
+
+    this._canvas.width = rect.width * this._dpr;
+    this._canvas.height = rect.width * this._dpr * this._viewHeightRatio;
+
+    this._ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
+
+    this.render();
+  }
+  
+  getSeriesNameList() {
+    const series_name_list = [];
+    for(const s of this._seriesList) series_name_list.push(s.name());
+    return series_name_list;
+  }
+
+  getSeries(name) {
+    return this._seriesList.find(s => s.name() === name);
+  }
+  clearSeries() { this._seriesList = []; }
+  
+  clear() {
+    const w = this._canvas.width / this._dpr;
+    const h = this._canvas.height / this._dpr;
+    this._ctx.clearRect(0, 0, w, h);
+  }
+}
+class Plot2D extends Plot {
+  constructor(canvas, heightRatio=0.8, xRange=[0, 0], yRange=[0, 0], xAxisName="X", yAxisName="Y") {
+    super(canvas, heightRatio);
+
     this._xAxes = [new _Axis(xAxisName, xRange[0], xRange[1], -1)];
     this._yAxes = [new _Axis(yAxisName, yRange[0], yRange[1], -1)];
     this._xAxes[0].drawAt(this._yAxes[0]);
     this._yAxes[0].drawAt(this._xAxes[0]);
 
-    this._seriesList = [];
-
     this.resize();
-    window.addEventListener("resize", () => this.resize());
   }
 
   addXAxis(name, xRange=[0,0], tickLength = undefined, drawAt = undefined) {
@@ -131,11 +166,6 @@ class Plot2D {
   }
   getYAxis(i=0){ return this._yAxes[i]; }
   
-  getSeriesNameList() {
-    const series_name_list = [];
-    for(const s of this._seriesList) series_name_list.push(s.name());
-    return series_name_list;
-  }
   addSeries(name, color, xArray = null, yArray = null, drawPoints = true, drawLine = true, xAxis = this._xAxes[0], yAxis = this._yAxes[0]) {
     const s = new _DataSeries2D(name, color, xAxis, yAxis, drawPoints, drawLine);
     if (!yArray) yArray = [];
@@ -143,22 +173,6 @@ class Plot2D {
     s.setData(xArray, yArray);
     this._seriesList.push(s);
     return s;
-  }
-  getSeries(name) {
-    return this._seriesList.find(s => s.name() === name);
-  }
-  clearSeries() { this._seriesList = []; }
-
-  // 高DPI対応リサイズ
-  resize() {
-    const rect = this._canvas.getBoundingClientRect();
-
-    this._canvas.width = rect.width * this._dpr;
-    this._canvas.height = rect.width * this._dpr * this._viewHeightRatio;
-
-    this._ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
-
-    this.render();
   }
 
   _toScreen(x, y, xAxis = undefined, yAxis = undefined) {
@@ -175,12 +189,6 @@ class Plot2D {
     }
 
     return [sx, sy];
-  }
-
-  clear() {
-    const w = this._canvas.width / this._dpr;
-    const h = this._canvas.height / this._dpr;
-    this._ctx.clearRect(0, 0, w, h);
   }
 
   // TODO: データ数が多くなったら連続描画（polyline）を検討 
@@ -442,19 +450,14 @@ class _DataSeries3D {
 // =========================
 // Plot3D
 // =========================
-class Plot3D {
-  constructor(canvas, viewHeightRatio=1.0, xRange=[0, 0], yRange=[0, 0], zRange=[0, 0], axisScale=[1.0, 1.0, 1.0]) {
-    this._canvas = canvas;
-    this._ctx = canvas.getContext("2d");
-    this._dpr = window.devicePixelRatio || 1;
+class Plot3D extends Plot {
+  constructor(canvas, heightRatio=1.0, xRange=[0, 0], yRange=[0, 0], zRange=[0, 0], axisScale=[1.0, 1.0, 1.0]) {
+    super(canvas, heightRatio);
 
-    this._viewHeightRatio = viewHeightRatio;
     this._xAxis = new _Axis("X", xRange[0], xRange[1]);
     this._yAxis = new _Axis("Y", yRange[0], yRange[1]);
     this._zAxis = new _Axis("Z", zRange[0], zRange[1]);
     this._axisScale = axisScale;
-
-    this._seriesList = [];
 
     this._yaw = -Math.PI / 4;
     this._pitch = -Math.PI / 4;
@@ -464,8 +467,6 @@ class Plot3D {
 
     this._resetView();
     this.resize();
-    this.render();
-    window.addEventListener("resize", () => this.resize());
 
     this._lastPointerX = null;
     this._lastPointerY = null;
@@ -556,34 +557,11 @@ class Plot3D {
       this._panY = 0;
   }
 
-  getSeriesNameList() {
-    const series_name_list = [];
-    for(const s of this._seriesList) series_name_list.push(s.name());
-    return series_name_list;
-  }
-
   addSeries(name, xArray, yArray, zArray, colorArray) {
     const s = new _DataSeries3D(name, this._xAxis, this._yAxis, this._zAxis);
     s.setData(xArray, yArray, zArray, colorArray);
     this._seriesList.push(s);
     return s;
-  }
-
-  getSeries(name) {
-    return this._seriesList.find(s => s.name() === name);
-  }
-
-  clearSeries() { this._seriesList = []; }
-
-  resize() {
-    const rect = this._canvas.getBoundingClientRect();
-
-    this._canvas.width = rect.width * this._dpr;
-    this._canvas.height = rect.width * this._dpr * this._viewHeightRatio;
-
-    this._ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
-
-    this.render();
   }
 
   _project(x, y, z) {
@@ -622,12 +600,6 @@ class Plot3D {
     const sy = h / 2 + this._panY - py * scale;
 
     return [sx, sy];
-  }
-
-  clear() {
-    const w = this._canvas.width / this._dpr;
-    const h = this._canvas.height / this._dpr;
-    this._ctx.clearRect(0, 0, w, h);
   }
 
   _drawLineP(px1, py1, px2, py2, color = "#888", width = 1) {

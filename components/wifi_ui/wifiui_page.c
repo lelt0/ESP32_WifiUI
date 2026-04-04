@@ -141,9 +141,8 @@ button:hover { background: #005fcc; }
 img, video { display: block; 
   margin: 10px auto; max-width: 100%%; max-height: 100vh; }
 
-.container { width: 100%%; margin: 0 auto; }
-canvas { display: block; 
-  margin: 10px auto; width: 100%%; height: auto;
+.plot_container canvas { display: block; 
+  margin: 1em auto; 
   background: #fff; border: 1px solid #eee;
 }
 

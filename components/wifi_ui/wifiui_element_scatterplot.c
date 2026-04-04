@@ -33,7 +33,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
     wifiui_element_scatterplot_t* self_plot = (wifiui_element_scatterplot_t*)self;
     dstring_t* html = dstring_create(1024);
     dstring_appendf(html, 
-        "<div class='container'><canvas id='%s_plot'></canvas></div>"
+        "<div class='plot_container'><canvas id='%s_plot'></canvas></div>"
         "<script>"
         "{"
             "const plot_id = '%s_plot';"

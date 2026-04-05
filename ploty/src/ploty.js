@@ -560,7 +560,7 @@ class Plot3D extends Plot {
   _resetView() {
       this._yaw = -Math.PI / 4;
       this._pitch = -Math.PI / 4;
-      this._zoom = 0.9;
+      this._zoom = 0.32;
       this._panX = 0;
       this._panY = 0;
   }
@@ -603,7 +603,7 @@ class Plot3D extends Plot {
     const w = this._canvas.width / this._dpr;
     const h = this._canvas.height / this._dpr;
 
-    const scale = Math.min(w, h) * 0.35 * this._zoom;
+    const scale = Math.min(w, h) * this._zoom;
     const sx = w / 2 + this._panX + px * scale;
     const sy = h / 2 + this._panY - py * scale;
 

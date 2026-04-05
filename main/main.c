@@ -88,7 +88,7 @@ void status_send_task(void *arg) {
                     uint8_t r = (xi << 3);
                     uint8_t b = (yi << 3);
                     uint8_t g = (((D - xi - 1) + (D - yi - 1)) << 2);
-                    color[i] = (uint32_t)((r << 16) | (g << 8) | b);
+                    color[i] = RGB(r, g, b);
                 }
             scatter3dplot->update_plot(scatter3dplot, point_count, x, y, z, color);
             free(x);

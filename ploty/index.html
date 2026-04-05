@@ -7,31 +7,30 @@
 <title>Graph2D Responsive</title>
 <style>
 * { box-sizing: border-box; }
-
 body { background: #FFF; color: #222; font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; 
-  width: min(100vh, 100vw); margin: 0 auto; padding: 1em 1em;
+width: min(100vh, 100vw); margin: 0 auto; padding: 1em 1em;
 }
-
 h1, h2, h3, h4, h5, h6, p { margin: 0 0 0.8em 0; text-align: left; }
 
 button { display: block;
-  margin: 0.5em auto; padding: 12px 16px; border: none; border-radius: 8px;
-  font-size: 1rem; background: #2d6cdf; color: #fff; cursor: pointer;
+margin: 0.5em auto; padding: 0.6em 1.2em; border: none; border-radius: 0.5em;
+font-size: 1em; background: #2d6cdf; color: #fff; cursor: pointer;
 }
 button { width: 100%;} @media (min-width: 600px) { button { width: auto; min-width: 100px; } }
 button:hover { background: #005fcc; } 
 
-img, video { display: block; 
-  margin: 1em auto; max-width: 100%; max-height: 100vh; }
+img, video { display: block; margin: 1em auto; max-width: 100%; max-height: 100vh; }
 
-.plot_container canvas { display: block; 
-  margin: 1em auto; 
-  background: #fff; border: 1px solid #eee;
-}
-
-.inline { display: inline-block;
-  margin: 5px; width: auto;
-}
+.plot_container canvas { display: block; margin: 1em auto; background: #fff; border: 1px solid #eee;}
+.inline { display: inline-block; margin: 0.5em; width: auto;}
+.wrap_text { white-space: pre-wrap; }
+.multi_input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 0.5em; margin-bottom: -0.4em; }
+.single_input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 0.5em; }
+.combo_input { width: 100%; padding: 8px; box-sizing: border-box; }
+.combo_list { top: 100%; left: 0; right: 0; border: 1px solid #ccc; border-top: none; overflow-y: auto; display: none; z-index: 1000; }
+.combo_item { padding: 6px 8px; cursor: pointer; }
+.combo_item:hover { background: #def; }
+.message_log {width: 100%; height: 200px; border: 1px solid #ccc; resize: none; overflow-y: auto; word-break: break-all; overflow-wrap: break-word; }
 </style>
 </head>
 <body>
@@ -39,8 +38,7 @@ img, video { display: block;
 <h1>はじめに</h1>
 <h2>第1章</h2>
 <p>The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.</p>
-<p>それも元来いくらでもどんな始末らによって方のうちから考えですな。近頃ほかから講演らは至極この支配べきんのみが来らと得るでをは永続いだろんと、少しにしかしですますななけれ。途よりいうう事は無論場合にもうましんなかっ。とうてい大森さんに自覚一つますます意味に悟っう自己その党派心それか＃「にに従ってご実在ただたないば、この時間は私か心性格を喜ぶば、嘉納さんの事を光明の何をはなはだご講演としけれども何生徒にご見当に行かようによくご料簡があるたたと、多分ちょうど教育に考えますているですのにできですない。つまりまたは実神経に見える気も多少簡単としですで、わが個人にはいうたいのでという人を飲んがいるでう。</p>
-<div id="debug_text">--</div>
+<div id="debug_text">それも元来いくらでもどんな始末らによって方のうちから考えですな。近頃ほかから講演らは至極この支配べきんのみが来らと得るでをは永続いだろんと、少しにしかしですますななけれ。途よりいうう事は無論場合にもうましんなかっ。とうてい大森さんに自覚一つますます意味に悟っう自己その党派心それか＃「にに従ってご実在ただたないば、この時間は私か心性格を喜ぶば、嘉納さんの事を光明の何をはなはだご講演としけれども何生徒にご見当に行かようによくご料簡があるたたと、多分ちょうど教育に考えますているですのにできですない。つまりまたは実神経に見える気も多少簡単としですで、わが個人にはいうたいのでという人を飲んがいるでう。</div>
 
 <button id="addPoint">点を追加</button>
 <div class="plot_container">

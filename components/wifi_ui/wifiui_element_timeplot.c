@@ -10,22 +10,20 @@ static void update_plots(const wifiui_element_timeplot_t* self, const uint64_t t
 static const char* COLORS[] = {"red", "blue", "green", "orange", "magenta", "cyan", "yellow"};
 
 const wifiui_element_timeplot_t * wifiui_element_timeplot(
-    const char* plot_title, uint8_t series_count, char** series_names, 
-    const char* y_label, float y_min, float y_max, 
-    float time_window_sec)
+    const char* y_label, float y_min, float y_max, float time_window_sec,
+    char** series_names, uint8_t series_count)
 {
     wifiui_element_timeplot_t* self = (wifiui_element_timeplot_t*)malloc(sizeof(wifiui_element_timeplot_t));
     set_default_common(&self->common, WIFIUI_TIMEPLOT, create_partial_html);
     self->common.system.use_websocket = true;
-    self->common.system.use_plotly = true;
+    self->common.system.use_ploty = true;
 
-    self->plot_title = strdup(plot_title);
     self->series_count = series_count;
-    self->series_names = (char**)malloc(sizeof(char*) * series_count);
-    self->series_colors = (char**)malloc(sizeof(char*) * series_count);
+    self->series_names = malloc(sizeof(char*) * series_count);
+    self->series_colors = malloc(sizeof(const char*) * series_count);
     for(uint8_t i = 0; i < series_count; i++) {
         self->series_names[i] = strdup(series_names[i]);
-        self->series_colors[i] = COLORS[i % sizeof(COLORS)];
+        self->series_colors[i] = COLORS[i % (sizeof(COLORS) / sizeof(COLORS[0]))];
     }
     self->y_label = strdup(y_label);
     self->y_auto_scale = (y_min >= y_max);
@@ -41,11 +39,11 @@ const wifiui_element_timeplot_t * wifiui_element_timeplot(
 dstring_t* create_partial_html(const wifiui_element_t* self)
 {
     wifiui_element_timeplot_t* self_plot = (wifiui_element_timeplot_t*)self;
-    dstring_t* series_names = dstring_create_json_list(self_plot->series_names, self_plot->series_count, 8);
+    dstring_t* series_names = dstring_create_json_list((const char* const*)self_plot->series_names, self_plot->series_count, 8);
     dstring_t* series_colors = dstring_create_json_list(self_plot->series_colors, self_plot->series_count, 8);
     dstring_t* html = dstring_create(1024);
     dstring_appendf(html, 
-        "<div id='%s_plot' style='width:100%%;height:50vh;'></div>"
+        "<div class='plot_container'><canvas id='%s_plot'></canvas></div>"
         "<script>"
         "{"
             "const plot_id = '%s_plot';"
@@ -53,87 +51,29 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
             "const FIXED_YRANGE = [%f, %f];"
 
             "let time0_sec = NaN;" // ESP時刻が0秒のときのページ時刻
-            "const layout = {"
-                "title: {text:'%s'},"
-                "xaxis: {"
-                    "title: {text:'Time [s]'},"
-                    "showgrid: true,"
-                    "range: [-TIME_WINDOW, 0]"
-                "},"
-                "xaxis2: {"
-                    "overlaying: 'x',"
-                    "side: 'top',"
-                    "showgrid: false,"
-                    "range: [-TIME_WINDOW, 0]"
-                "},"
-                "yaxis: {"
-                    "title: {text:'%s'},"
-                    "autorange: true"
-                "},"
-                "legend: { orientation: 'h' }"
-            "};"
-            "let dummy = {"
-                "x: [-TIME_WINDOW, 0],"
-                "y: [null, null],"
-                "xaxis: 'x',"
-                "yaxis: 'y',"
-                "showlegend: false,"
-                "hoverinfo: 'skip'"
-            "};"
-            "Plotly.newPlot(plot_id, [dummy], layout);"
+            "const canvas = document.getElementById(plot_id);"
+            "const plot = new Plot2D(canvas, 0.8, [-TIME_WINDOW, 0], FIXED_YRANGE, undefined, '%s');"
+            "plot.getYAxis().drawName(true);"
+            "const xaxis2 = plot.addXAxis('abs_t', [-TIME_WINDOW, 0], undefined, 0);"
             
-            "let traces = [];"
             "const series_names = %s;"
             "const series_colors = %s;"
-            "for(let series_i = 0; series_i < %d; series_i++){"
-                "traces.push({x:[], y:[]});"
-                "Plotly.addTraces(plot_id, {"
-                    "x: [],"
-                    "y: [],"
-                    "mode: 'lines',"
-                    "xaxis: 'x2',"
-                    "name: series_names[series_i],"
-                    "line: {color: series_colors[series_i]}"
-                "});"
+            "for(let i = 0; i < %d; i++){"
+                "plot.addSeries(series_names[i], series_colors[i], null, null, true, true, xaxis2);"
             "}"
 
-            "function updateValues(time_sec, values)"
-            "{"
+            "function updateValues(time_sec, values){"
                 "if(isNaN(time0_sec)){ time0_sec = performance.now() / 1000.0 - time_sec; }"
-                "values.forEach((value, value_i)=>{"
-                    "if(!isNaN(value)){"
-                        "traces[value_i].x.push(time_sec);"
-                        "traces[value_i].y.push(value);"
-                    "}"
+                "values.forEach((value, i)=>{"
+                    "if(!isNaN(value)){ plot.getSeries(series_names[i]).addData(time_sec, value); }"
                 "});"
             "}"
-            "function updatePlot()"
-            "{"
+            "function updatePlot(){"
                 "const now_sec = performance.now() / 1000.0;"
                 "if(isNaN(time0_sec)){return;}"
-
-                "traces.forEach((trace, trace_i)=>{"
-                    "while (trace.x.length > 1 && trace.x[1] < (now_sec - time0_sec) - TIME_WINDOW) {"
-                        "trace.x.shift();"
-                        "trace.y.shift();"
-                    "}"
-                "});"
-                "traces.forEach((trace, trace_i)=>{"
-                    "Plotly.restyle(plot_id, {"
-                        "x: [trace.x],"
-                        "y: [trace.y]"
-                    "}, 1/*dummy*/ + trace_i);"
-                "});"
-                "Plotly.relayout(plot_id, {"
-                    "'xaxis2.range': [(now_sec-time0_sec)-TIME_WINDOW, now_sec-time0_sec]"
-                "});"
-
-                "const autoscale = %s;"
-                "if (autoscale) {"
-                    "Plotly.relayout(plot_id, {'yaxis.autorange': true});"
-                "} else {"
-                    "Plotly.relayout(plot_id, {'yaxis.range': FIXED_YRANGE});"
-                "}"
+                "xaxis2.setMinMax(null, now_sec - time0_sec);"
+                "for(const sname of series_names){ plot.getSeries(sname).delOldX(); }" // 過去のデータを削除
+                "plot.render();"
             "}"
             "setInterval(() => { updatePlot(performance.now() / 1000.0);}, 100);"
 
@@ -168,10 +108,8 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
         "}"
         "</script>"
         , self_plot->common.id_str
-        , self_plot->common.id_str, self_plot->time_window_sec, self_plot->y_min, self_plot->y_max
-        , self_plot->plot_title, self_plot->y_label
+        , self_plot->common.id_str, self_plot->time_window_sec, self_plot->y_min, self_plot->y_max, self_plot->y_label
         , series_names->str, series_colors->str, self_plot->series_count
-        , (self_plot->y_auto_scale?"true":"false")
         , self_plot->common.id, self_plot->series_count
     );
     dstring_free(series_names);

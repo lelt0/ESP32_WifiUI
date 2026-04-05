@@ -10,7 +10,6 @@ extern "C" {
 typedef struct wifiui_element_scatterplot wifiui_element_scatterplot_t;
 struct wifiui_element_scatterplot {
     wifiui_element_t common;
-    const char* plot_title;
     const char* x_label;
     float x_min;
     float x_max;
@@ -24,7 +23,6 @@ struct wifiui_element_scatterplot {
 };
 
 const wifiui_element_scatterplot_t * wifiui_element_scatterplot(
-    const char* plot_title, 
     const char* x_label, float x_min, float x_max, 
     const char* y_label, float y_min, float y_max);
 

@@ -45,8 +45,8 @@ void status_send_task(void *arg) {
 
         if(timeplot != NULL)
         {
-            float val1 = sin(time) + 0.2 * ((float)rand()/RAND_MAX);
-            float val2 = cos(time*0.5) + 0.2 * ((float)rand()/RAND_MAX);
+            float val1 = sinf(time) + 0.2 * ((float)rand()/RAND_MAX);
+            float val2 = cosf(time*0.5) + 0.2 * ((float)rand()/RAND_MAX);
             uint64_t time_ms = (uint64_t)time*1000;
             timeplot->update_plots(timeplot, time_ms, (float[]){val1, val2, NAN});
             if(((int)time)%2==0) timeplot->update_plot(timeplot, "signalC", time_ms, (float)rand()/RAND_MAX);
@@ -72,26 +72,29 @@ void status_send_task(void *arg) {
 
         if(scatter3dplot != NULL)
         {
-            uint16_t point_count = rand() % 100;
-            if(point_count > 0)
-            {
-                float *x = (float*)malloc(point_count * sizeof(float));
-                float *y = (float*)malloc(point_count * sizeof(float));
-                float *z = (float*)malloc(point_count * sizeof(float));
-                uint32_t *color = (uint32_t*)malloc(point_count * sizeof(uint32_t));
-                for(int i = 0; i < point_count; i++)
+            const int D = 32;
+            size_t point_count = D * D;
+            float *x = (float*)malloc(point_count * sizeof(float));
+            float *y = (float*)malloc(point_count * sizeof(float));
+            float *z = (float*)malloc(point_count * sizeof(float));
+            uint32_t *color = (uint32_t*)malloc(point_count * sizeof(uint32_t));
+            for(int32_t yi = 0; yi < D; yi++)
+                for(int32_t xi = 0; xi < D; xi++)
                 {
-                    x[i] = ((float)rand()/RAND_MAX);
-                    y[i] = ((float)rand()/RAND_MAX);
-                    z[i] = ((float)rand()/RAND_MAX);
-                    color[i] = (uint32_t)(rand()%UINT32_MAX);
+                    int32_t i = yi * D + xi;
+                    x[i] = (float) xi / D;
+                    y[i] = (float) yi / D;
+                    z[i] = 0.25 * sinf(6 * x[i] + time/8.f) * sinf(6 * y[i] + time/8.f);
+                    uint8_t r = (xi << 3);
+                    uint8_t b = (yi << 3);
+                    uint8_t g = (((D - xi - 1) + (D - yi - 1)) << 2);
+                    color[i] = RGB(r, g, b);
                 }
-                scatter3dplot->update_plot(scatter3dplot, point_count, x, y, z, color);
-                free(x);
-                free(y);
-                free(z);
-                free(color);
-            }
+            scatter3dplot->update_plot(scatter3dplot, point_count, x, y, z, color);
+            free(x);
+            free(y);
+            free(z);
+            free(color);
         }
     }
 }
@@ -194,15 +197,15 @@ void app_main(void)
 
     /* Time Plot sample */
     wifiui_add_element(timeplot_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
-    wifiui_add_element(timeplot_page, (const wifiui_element_t*) (timeplot = wifiui_element_timeplot("Plot Sample", 3, (char*[]){"signalA", "signalB", "signalC"}, "Value", -2, 2, 30)));
+    wifiui_add_element(timeplot_page, (const wifiui_element_t*) (timeplot = wifiui_element_timeplot("Value", -2, 2, 30, (char*[]){"signalA", "signalB", "signalC"}, 3)));
 
     /* Scatter (X-Y) Plot sample */
     wifiui_add_element(scatter_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
-    wifiui_add_element(scatter_page, (const wifiui_element_t*) (scatterplot = wifiui_element_scatterplot("Scatter Sample", "x", 0, 0, "y", 0, 0)));
+    wifiui_add_element(scatter_page, (const wifiui_element_t*) (scatterplot = wifiui_element_scatterplot("x", 0, 0, "y", 0, 0)));
 
     /* 3D Scatter Plot sample */
     wifiui_add_element(scatter3d_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
-    wifiui_add_element(scatter3d_page, (const wifiui_element_t*) (scatter3dplot = wifiui_element_scatter3d_plot("Plot Sample", 0, 1, 0, 1, 0, 1)));
+    wifiui_add_element(scatter3d_page, (const wifiui_element_t*) (scatter3dplot = wifiui_element_scatter3d_plot(0, 1, 0, 1, -0.5, 0.5)));
 
     gpio_reset_pin(LED_GPIO);
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);

@@ -7,10 +7,13 @@ extern "C" {
 #include <stdint.h>
 #include "../wifiui_element_base_.h"
 
+#ifndef RGB
+ #define RGB(r,g,b) ((uint32_t)(((r)<<16)|((g)<<8)|(b)))
+#endif
+
 typedef struct wifiui_element_scatter3dplot wifiui_element_scatter3dplot_t;
 struct wifiui_element_scatter3dplot {
     wifiui_element_t common;
-    const char* plot_title;
     float x_min;
     float x_max;
     float y_min;
@@ -21,7 +24,6 @@ struct wifiui_element_scatter3dplot {
 };
 
 const wifiui_element_scatter3dplot_t * wifiui_element_scatter3d_plot(
-    const char* plot_title, 
     float x_min, float x_max,
     float y_min, float y_max,
     float z_min, float z_max);

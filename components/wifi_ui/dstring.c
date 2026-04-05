@@ -1,6 +1,7 @@
 #include "dstring.h"
 #include "stdio.h"
 #include "stdarg.h"
+#include "stdlib.h"
 
 static void dstr_realloc(dstring_t* dstr, size_t required_len);
 
@@ -14,7 +15,7 @@ dstring_t* dstring_create(size_t unit_length)
     return dstr;
 }
 
-dstring_t* dstring_create_json_list(char** strs, size_t strs_count, size_t unit_length)
+dstring_t* dstring_create_json_list(const char* const* strs, size_t strs_count, size_t unit_length)
 {
     dstring_t* dstr = dstring_create(unit_length * strs_count);
     for(int i = 0; i < strs_count; i++)

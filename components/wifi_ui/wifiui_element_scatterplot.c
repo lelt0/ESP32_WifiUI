@@ -7,16 +7,14 @@ static dstring_t* create_partial_html(const wifiui_element_t* self);
 static void add_plot(const wifiui_element_scatterplot_t* self, const char* series_name, const uint32_t point_count, const float* x, const float* y, bool draw_line);
 
 const wifiui_element_scatterplot_t * wifiui_element_scatterplot(
-    const char* plot_title, 
     const char* x_label, float x_min, float x_max, 
     const char* y_label, float y_min, float y_max)
 {
     wifiui_element_scatterplot_t* self = (wifiui_element_scatterplot_t*)malloc(sizeof(wifiui_element_scatterplot_t));
     set_default_common(&self->common, WIFIUI_SCATTERPLOT, create_partial_html);
     self->common.system.use_websocket = true;
-    self->common.system.use_plotly = true;
+    self->common.system.use_ploty = true;
 
-    self->plot_title = strdup(plot_title);
     self->x_label = strdup(x_label);
     self->x_auto_scale = (x_min >= x_max);
     self->x_min = x_min;
@@ -35,42 +33,30 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
     wifiui_element_scatterplot_t* self_plot = (wifiui_element_scatterplot_t*)self;
     dstring_t* html = dstring_create(1024);
     dstring_appendf(html, 
-        "<div id='%s_plot' style='width:100vmin;height:100vmin;'></div>"
+        "<div class='plot_container'><canvas id='%s_plot'></canvas></div>"
         "<script>"
         "{"
             "const plot_id = '%s_plot';"
             "const COLORS = ['red', 'blue', 'green', 'orange', 'magenta', 'cyan', 'yellow'];"
-            "let traces = [];"
-            "let layout = {"
-                "title: { text:'%s' },"
-                "xaxis: { title: {text:'%s'}, autorange: %s, range: [%f, %f] },"
-                "yaxis: { title: {text:'%s'}, autorange: %s, range: [%f, %f] },"
-                "showlegend: true, "
-                "legend: { orientation: 'h' }"
-            "};"
-            "Plotly.newPlot(plot_id, traces, layout);"
+            "const canvas = document.getElementById(plot_id);"
+            "const plot = new Plot2D(canvas, 1.0, [%f, %f], [%f, %f], '%s', '%s');"
+            "plot.getXAxis().drawName(true);"
+            "plot.getYAxis().drawName(true);"
 
             "function addPlot(series_name, x, y, draw_line) {"
-                "let idx = traces.findIndex(tr => tr.name === series_name);"
+                "const series_names = plot.getSeriesNameList();"
+                "let idx = series_names.indexOf(series_name);"
                 "if (idx === -1) {"
                     // 新規系列
-                    "let trace = {"
-                        "x: x,"
-                        "y: y,"
-                        "mode: draw_line ? 'lines+markers' : 'markers',"
-                        "type: 'scatter',"
-                        "marker: { color: COLORS[traces.length%%COLORS.length] },"
-                        "name: series_name"
-                    "};"
-                    "traces.push(trace);"
+                    "idx = series_names.length;"
+                    "plot.addSeries(series_name, COLORS[idx%%COLORS.length], x, y, true, draw_line);"
                 "} else {"
                     // 既存系列を更新
-                    "traces[idx].x = x;"
-                    "traces[idx].y = y;"
-                    "traces[idx].mode = draw_line ? 'lines+markers' : 'markers';"
-                    "traces[idx].marker.color = COLORS[idx%%COLORS.length];"
+                    "const s = plot.getSeries(series_name);"
+                    "s.setData(x, y);"
+                    "s.drawLines(draw_line);"
                 "}"
-                "Plotly.newPlot(plot_id, traces, layout);"
+                "plot.render();"
             "}"
             "function parseMessage(buffer) {"
                 "const u8 = new Uint8Array(buffer);"
@@ -126,10 +112,9 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
             "};"
         "}"
         "</script>"
-        , self_plot->common.id_str
-        , self_plot->common.id_str, self_plot->plot_title
-        , self_plot->x_label, self_plot->x_auto_scale?"true":"false", self_plot->x_min, self_plot->x_max
-        , self_plot->y_label, self_plot->y_auto_scale?"true":"false", self_plot->y_min, self_plot->y_max
+        , self_plot->common.id_str, self_plot->common.id_str
+        , self_plot->x_min, self_plot->x_max, self_plot->y_min, self_plot->y_max
+        , self_plot->x_label, self_plot->y_label
         , self_plot->common.id
     );
     return html;
@@ -138,8 +123,8 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
 void add_plot(const wifiui_element_scatterplot_t* self, const char* series_name, const uint32_t point_count, const float* x, const float* y, bool draw_line)
 {
     size_t series_name_size = strlen(series_name) + 1;
-    size_t x_offset = (((series_name_size + 1) / 4) + 1) * 4;
-    size_t half_length = point_count * sizeof(float);
+    size_t x_offset = (((series_name_size + 1) / 4) + 1) * 4; // series_name + draw_lineで4byteアライメント
+    size_t half_length = point_count * sizeof(float); // x,yそれぞれ分の片方の意
     size_t buf_size = x_offset + half_length * 2;
     char* buf = (char*)malloc(buf_size);
 

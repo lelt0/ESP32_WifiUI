@@ -10,7 +10,6 @@
 #include "esp_netif.h"
 #include "lwip/inet.h"
 #include "lwip/netdb.h"
-#include "esp_spiffs.h"
 
 #include "dns_server.h"
 #include "wifiui_page.h"
@@ -18,6 +17,8 @@
 #define MAX_AP_CONN 2
 
 static const char * TAG = "wifiui_server";
+extern const uint8_t ploty_min_js_gz_start[] asm("_binary_ploty_min_js_gz_start");
+extern const uint8_t ploty_min_js_gz_end[]   asm("_binary_ploty_min_js_gz_end");
 
 typedef struct {
     int fd;
@@ -41,13 +42,12 @@ static httpd_handle_t start_webserver(void);
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 static esp_err_t page_access_handler(httpd_req_t *req);
 static esp_err_t websocket_handler(httpd_req_t *req);
-static esp_err_t plotly_js_get_handler(httpd_req_t *req);
+static esp_err_t ploty_js_get_handler(httpd_req_t *req);
 static esp_err_t redirect_handler(httpd_req_t *req);
 static esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err); // HTTP Error (404) Handler - Redirects all requests to the root page
 
 static void create_ssid(char * dst, unsigned int dst_len);
 static esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd);
-static esp_err_t mount_spiffs(void);
 static void websoket_close(int fd);
 static esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst);
 static esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst);
@@ -61,8 +61,6 @@ void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_pag
 
     for(int i = 0; i < MAX_AP_CONN; i++){ ws_cilents[i].fd = -1; ws_cilents[i].ip_addr.addr = 0; ws_cilents[i].active_page = NULL; }
     top_page_uri = top_page->uri;
-
-    mount_spiffs();
 
     /*
         Turn of warnings from HTTP server as redirecting traffic will yield
@@ -212,12 +210,12 @@ httpd_handle_t start_webserver(void)
                 }
             }
         }
-        static const httpd_uri_t plotly_js_uri = {
-            .uri = "/plotly.min.js",
+        static const httpd_uri_t ploty_js_uri = {
+            .uri = "/ploty.js",
             .method = HTTP_GET,
-            .handler = plotly_js_get_handler
+            .handler = ploty_js_get_handler
         };
-        httpd_register_uri_handler(server, &plotly_js_uri);
+        httpd_register_uri_handler(server, &ploty_js_uri);
         const httpd_uri_t redirect_uri = {
             .uri = "*",
             .method = HTTP_GET,
@@ -409,34 +407,13 @@ esp_err_t websocket_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-esp_err_t plotly_js_get_handler(httpd_req_t *req)
+esp_err_t ploty_js_get_handler(httpd_req_t *req)
 {
-    ESP_LOGI(TAG, "Serve plotly.js");
-    
-    FILE *fp = fopen("/spiffs/plotly.min.js.gz", "rb");
-    if (!fp) {
-        ESP_LOGE(TAG, "File open failed: /spiffs/plotly.min.js.gz");
-        httpd_resp_send_404(req);
-        return ESP_FAIL;
-    }
-
+    const size_t len = ploty_min_js_gz_end - ploty_min_js_gz_start;
     httpd_resp_set_type(req, "application/javascript");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-
-    // 1KBずつ送る
-    char buf[1024];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        esp_err_t r = httpd_resp_send_chunk(req, buf, n);
-        if (r != ESP_OK) {
-            ESP_LOGE(TAG, "send chunk failed: %s", esp_err_to_name(r));
-            fclose(fp);
-            return r;
-        }
-    }
-    fclose(fp);
-    httpd_resp_send_chunk(req, NULL, 0);
-    
+    httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=86400");
+    httpd_resp_send(req, (const char *)ploty_min_js_gz_start, len);
     return ESP_OK;
 }
 
@@ -531,25 +508,6 @@ esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd)
     } else {
         return (esp_ip4_addr_t){0};
     }
-}
-
-esp_err_t mount_spiffs(void)
-{
-    esp_vfs_spiffs_conf_t conf = {
-        .base_path = "/spiffs",
-        .partition_label = "storage", // partitions.csvのラベルに合わせる
-        .max_files = 5,
-        .format_if_mount_failed = false  // 既存イメージを消さない
-    };
-    esp_err_t err = esp_vfs_spiffs_register(&conf);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "SPIFFS mount failed: %s", esp_err_to_name(err));
-        return err;
-    }
-    size_t total = 0, used = 0;
-    esp_spiffs_info(conf.partition_label, &total, &used);
-    ESP_LOGI(TAG, "SPIFFS mounted. total=%u, used=%u", (unsigned int)total, (unsigned int)used);
-    return ESP_OK;
 }
 
 void websoket_close(int fd)

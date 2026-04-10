@@ -323,16 +323,11 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id
                 {
                     if (addr.ss_family == AF_INET) {
                         struct sockaddr_in *a = (struct sockaddr_in *)&addr;
-                        esp_ip4_addr_t fd_ip;
-                        fd_ip.addr = a->sin_addr.s_addr;
-                        if(fd_ip.addr == client->ip.addr) fd_is_discon_client = true;
+                        if(a->sin_addr.s_addr == client->ip.addr) fd_is_discon_client = true;
                     }
                     else if(addr.ss_family == AF_INET6)
                     {
                         struct sockaddr_in6 *a = (struct sockaddr_in6 *)&addr;
-                        esp_ip4_addr_t fd_ip;
-                        fd_ip.addr = a->sin6_addr.un.u32_addr[3];
-                        
                         if(a->sin6_addr.un.u32_addr[3] == client->ip.addr) fd_is_discon_client = true;
                     }
                 }

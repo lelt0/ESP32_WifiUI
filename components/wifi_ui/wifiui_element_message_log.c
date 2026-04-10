@@ -3,10 +3,13 @@
 #include "wifiui_element_message_log.h"
 #include "dstring.h"
 #include "esp_log.h"
+#include "esp_vfs.h"
+#include "esp_rom_serial_output.h"
 
 static dstring_t* create_partial_html(const wifiui_element_t* self);
 static void mirror_log_init(const wifiui_element_msglog_t* mirror_log_element);
 static void print_message(const wifiui_element_msglog_t* self, const char* message);
+static void init_custom_stdout(void);
 
 const wifiui_element_msglog_t * wifiui_element_message_log(bool mirror_log_mode)
 {
@@ -42,12 +45,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
     return html;
 }
 
-
-static vprintf_like_t s_orig_vprintf = NULL;  // オリジナルのログ関数ポインタ
-static bool in_mirror_log = false;              // ログ関数再帰防止フラグ
-static int mirror_log_vprintf(const char *fmt, va_list args);
 static const wifiui_element_msglog_t* s_mirror_log_element = NULL;
-#define min(a, b) (((a)<(b))?(a):(b))
 void mirror_log_init(const wifiui_element_msglog_t* mirror_log_element)
 {
     if(s_mirror_log_element != NULL)
@@ -57,32 +55,51 @@ void mirror_log_init(const wifiui_element_msglog_t* mirror_log_element)
     }
 
     s_mirror_log_element = mirror_log_element;
-    if(s_orig_vprintf == NULL) s_orig_vprintf = esp_log_set_vprintf(mirror_log_vprintf); // シリアル出力を盗んでWebSocketでも送信するようにする
-}
-static int mirror_log_vprintf(const char *fmt, va_list args)
-{
-    if (in_mirror_log) {
-        return s_orig_vprintf(fmt, args);
-    }
-
-    in_mirror_log = true;
-
-    static char buf[256];
-    va_list args_copy;
-    va_copy(args_copy, args);
-    int len = vsnprintf(buf, sizeof(buf), fmt, args_copy);
-    va_end(args_copy);
-    if (len > 0 && s_mirror_log_element != NULL) {
-        wifiui_element_send_data(&s_mirror_log_element->common, buf, min(len+1, sizeof(buf)));
-    }
-
-    int ret = s_orig_vprintf(fmt, args);
-
-    in_mirror_log = false;
-    return ret;
+    init_custom_stdout();
 }
 
 void print_message(const wifiui_element_msglog_t* self, const char* message)
 {
     wifiui_element_send_data(&self->common, message, strlen(message) + 1);
+}
+
+static bool output_mutex = false;
+static ssize_t my_write(int fd, const void *data, size_t size)
+{
+    const char * const start = (const char *)data;
+    const char * const end = (const char *)(data + size);
+
+    if (!output_mutex && s_mirror_log_element != NULL)
+    {
+        output_mutex = true;
+        wifiui_element_send_data(&s_mirror_log_element->common, start, size);
+        output_mutex = false;
+    }
+
+    // 元UARTへROM経由で出力
+    const char* o = start;
+    while(o < end) esp_rom_output_tx_one_char(*(o++));
+    return size;
+}
+
+static int my_open(const char *path, int flags, int mode)
+{
+    return 3;
+}
+
+static int my_close(int fd)
+{
+    return 0;
+}
+static const esp_vfs_fs_ops_t my_vfs_ops = {
+    .write = my_write,
+    .open  = my_open,
+    .close = my_close,
+};
+void init_custom_stdout(void)
+{
+    // シリアル出力を盗んでWebSocketでも送信するようにする
+    esp_vfs_register_fs("/dev/mylog", &my_vfs_ops, ESP_VFS_FLAG_STATIC, NULL);
+    freopen("/dev/mylog", "w", stdout);
+    freopen("/dev/mylog", "w", stderr);
 }

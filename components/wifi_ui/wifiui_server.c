@@ -13,19 +13,26 @@
 
 #include "dns_server.h"
 #include "wifiui_page.h"
+#include "wifiui_server.h"
 
 #define MAX_AP_CONN 2
+#define MAX_SOCKS 7
 
 static const char * TAG = "wifiui_server";
 extern const uint8_t ploty_min_js_gz_start[] asm("_binary_ploty_min_js_gz_start");
 extern const uint8_t ploty_min_js_gz_end[]   asm("_binary_ploty_min_js_gz_end");
 
 typedef struct {
-    int fd;
-    esp_ip4_addr_t ip_addr;
+    bool active;
+    uint8_t mac[6];
+    esp_ip4_addr_t ip;
+    int ws_fd;
     const wifiui_page_t* active_page;
-} websocket_client_t;
-static websocket_client_t ws_cilents[MAX_AP_CONN];
+} client_info_t;
+static client_info_t clients_info[MAX_AP_CONN];
+static void clear_client_info(client_info_t* cinfo){ cinfo->active = false; memset(cinfo->mac, 0, 6); cinfo->ip.addr = 0; cinfo->ws_fd=-1; cinfo->active_page = NULL; }
+static client_info_t* find_client_info_from_mac(uint8_t mac[6]){ if(!mac) return NULL; for(int i=0; i<MAX_AP_CONN; i++){ if(clients_info[i].active && memcmp(clients_info[i].mac, mac, 6)==0) return &clients_info[i]; } return NULL; }
+static client_info_t* find_client_info(esp_ip4_addr_t* ip){ if(!ip) return NULL; for(int i=0; i<MAX_AP_CONN; i++){ if(clients_info[i].active && clients_info[i].ip.addr == ip->addr) return &clients_info[i]; } return NULL; }
 
 static httpd_handle_t server = NULL;
 static const char * top_page_uri = NULL;
@@ -59,7 +66,7 @@ void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_pag
         return;
     }
 
-    for(int i = 0; i < MAX_AP_CONN; i++){ ws_cilents[i].fd = -1; ws_cilents[i].ip_addr.addr = 0; ws_cilents[i].active_page = NULL; }
+    for(int i = 0; i < MAX_AP_CONN; i++) clear_client_info(&clients_info[i]);
     top_page_uri = top_page->uri;
 
     /*
@@ -85,6 +92,9 @@ void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_pag
     esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &wifi_event_handler, NULL, NULL);
     esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &wifi_event_handler, NULL, NULL);
     esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL);
+    esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_AP_STACONNECTED, &wifi_event_handler, NULL, NULL);
+    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_ASSIGNED_IP_TO_CLIENT, &wifi_event_handler, NULL, NULL);
+    esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_AP_STADISCONNECTED, &wifi_event_handler, NULL, NULL);
 
 
     // Initialize Wi-Fi including netif with default config
@@ -100,6 +110,8 @@ void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_pag
     // Start the DNS server that will redirect all queries to the softAP IP
     dns_server_config_t dns_config = DNS_SERVER_CONFIG_SINGLE("*" /* all A queries */, "WIFI_AP_DEF" /* softAP netif ID */);
     start_dns_server(&dns_config);
+
+    ESP_LOGI(TAG, "wifiui started!");
 }
 
 void wifi_init_softap(const char* ap_ssid, const char* ap_password)
@@ -155,9 +167,7 @@ void wifi_init_softap(const char* ap_ssid, const char* ap_password)
 
     esp_netif_ip_info_t ip_info_;
     get_current_ap_ip(&ip_info_);
-    ESP_LOGI(TAG, "Set up softAP with IP: " IPSTR, IP2STR(&ip_info_.ip));
-    ESP_LOGI(TAG, "wifi_init_softap finished. SSID:'%s' password:'%s'",
-             wifi_config.ap.ssid, wifi_config.ap.password);
+    ESP_LOGI(TAG, "Set up softAP with IP:" IPSTR " SSID:'%s' password:'%s'", IP2STR(&ip_info_.ip), wifi_config.ap.ssid, wifi_config.ap.password);
 }
 
 httpd_handle_t start_webserver(void)
@@ -167,7 +177,7 @@ httpd_handle_t start_webserver(void)
     config.task_priority = tskIDLE_PRIORITY+5;
     config.uri_match_fn = httpd_uri_match_wildcard; // "/*" を使う
     config.lru_purge_enable = true; // 古い接続を追い出す
-    config.max_open_sockets = 7;
+    config.max_open_sockets = MAX_SOCKS;
     config.recv_wait_timeout = 3;
     config.send_wait_timeout = 3;
     uint16_t page_count = 0;
@@ -175,10 +185,8 @@ httpd_handle_t start_webserver(void)
     config.max_uri_handlers = page_count * 2 + 2;
 
     // Start the httpd server
-    ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
     if (httpd_start(&server, &config) == ESP_OK) {
         // Set URI handlers
-        ESP_LOGI(TAG, "Registering URI handlers");
         {
             for(int page_i = 0; page_i < page_count; page_i++)
             {
@@ -225,6 +233,7 @@ httpd_handle_t start_webserver(void)
         httpd_register_uri_handler(server, &redirect_uri);
         httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
     }
+    ESP_LOGI(TAG, "HTTP server started. port:%u", config.server_port);
     return server;
 }
 
@@ -271,11 +280,82 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id
             on_ap_disconnected_callback(on_ap_disconnected_callback_arg, disconn->reason);
         }
     }
+
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED)
+    {
+        wifi_event_ap_staconnected_t *event = (wifi_event_ap_staconnected_t*) event_data;
+        ESP_LOGD(TAG, "New AP client connected. mac:" MACSTR, MAC2STR(event->mac));
+
+        for(int i = 0; i < MAX_AP_CONN; i++) {
+            if(!clients_info[i].active) {
+                clear_client_info(&clients_info[i]);
+                clients_info[i].active = true;
+                memcpy(clients_info[i].mac, event->mac, 6);
+                break;
+            }
+        }
+    }
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_ASSIGNED_IP_TO_CLIENT)
+    {
+        ip_event_assigned_ip_to_client_t *event = (ip_event_assigned_ip_to_client_t*) event_data;
+        ESP_LOGI(TAG, "IP assigned. mac:" MACSTR " ip:" IPSTR, MAC2STR(event->mac), IP2STR(&event->ip));
+        
+        client_info_t* client = find_client_info_from_mac(event->mac);
+        if(client != NULL) client->ip = event->ip;
+    }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED)
+    {
+        wifi_event_ap_stadisconnected_t *event = event_data;
+        ESP_LOGI(TAG, "AP client disconnected. mac:" MACSTR, MAC2STR(event->mac));
+
+        client_info_t* client = find_client_info_from_mac(event->mac);
+        if(client != NULL)
+        {
+            size_t fds = MAX_SOCKS;
+            int alive_fds[MAX_SOCKS] = {0};
+            ESP_ERROR_CHECK(httpd_get_client_list(server, &fds, alive_fds));
+            for(int fd_i = 0; fd_i < fds; fd_i++)
+            {
+                bool fd_is_discon_client = false;
+                struct sockaddr_storage addr;
+                socklen_t addr_len = sizeof(addr);
+                if (getpeername(alive_fds[fd_i], (struct sockaddr *)&addr, &addr_len) == 0)
+                {
+                    if (addr.ss_family == AF_INET) {
+                        struct sockaddr_in *a = (struct sockaddr_in *)&addr;
+                        esp_ip4_addr_t fd_ip;
+                        fd_ip.addr = a->sin_addr.s_addr;
+                        if(fd_ip.addr == client->ip.addr) fd_is_discon_client = true;
+                    }
+                    else if(addr.ss_family == AF_INET6)
+                    {
+                        struct sockaddr_in6 *a = (struct sockaddr_in6 *)&addr;
+                        esp_ip4_addr_t fd_ip;
+                        fd_ip.addr = a->sin6_addr.un.u32_addr[3];
+                        
+                        if(a->sin6_addr.un.u32_addr[3] == client->ip.addr) fd_is_discon_client = true;
+                    }
+                }
+
+                if(fd_is_discon_client)
+                {
+                    struct linger so_linger;
+                    so_linger.l_onoff = 1;
+                    so_linger.l_linger = 0;
+                    setsockopt(alive_fds[fd_i], SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
+                    httpd_sess_trigger_close(server, alive_fds[fd_i]);
+                }
+            }
+
+            clear_client_info(client);
+        }
+    }
 }
 
 esp_err_t page_access_handler(httpd_req_t *req)
 {
-    ESP_LOGI(TAG, "ACCESS: %s %s", req->uri, http_method_str(req->method));
+    int sock_fd = httpd_req_to_sockfd(req);
+    ESP_LOGD(TAG, "ACCESS: %s %s (fd%d)", req->uri, http_method_str(req->method), sock_fd);
 
     uint16_t pages_count = 0;
     wifiui_page_t ** pages = wifiui_get_pages(&pages_count);
@@ -290,11 +370,24 @@ esp_err_t page_access_handler(httpd_req_t *req)
             {
                 case HTTP_GET:
                 {
-                    ESP_LOGI(TAG, "Serve page: %s \"%s\"", page->uri, page->title);
                     httpd_resp_set_type(req, "text/html");
                     dstring_t* html = wifiui_generate_page_html(page);
                     httpd_resp_send(req, html->str, HTTPD_RESP_USE_STRLEN);
                     dstring_free(html);
+
+                    esp_ip4_addr_t ip =  get_client_ip_addr(req, sock_fd);
+                    client_info_t* client = find_client_info(&ip);
+                    if(client != NULL)
+                    {
+                        bool redirect = (strstr(req->uri, "redirect=1") != NULL);
+                        if(!redirect && client->active_page != page) // ページへのダイレクトアクセスのみclients_info[].ws_fdをクリア（redirectは無視）
+                        {
+                            client->ws_fd = -1;
+                            client->active_page = page;
+                        }
+                    }
+                    
+                    ESP_LOGI(TAG, "HTTP %s served. (fd%d)", req->uri, sock_fd);
                     return ESP_OK;
                 }
                 break;
@@ -303,9 +396,7 @@ esp_err_t page_access_handler(httpd_req_t *req)
                     char query[32];
                     char param[16];
                     if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
-                        ESP_LOGI(TAG, "Found URL query => %s", query);
                         if (httpd_query_key_value(query, "eid", param, sizeof(param)) == ESP_OK) {
-                            ESP_LOGI(TAG, "Found URL query parameter => eid=%s", param);
                             wifiui_element_id eid = (wifiui_element_id)strtol(param, NULL, 16);
                             wifiui_element_t* element = wifiui_find_element(page, eid);
                             if(element != NULL && element->system.on_post_from_this_element != NULL)
@@ -332,58 +423,38 @@ esp_err_t page_access_handler(httpd_req_t *req)
 
 esp_err_t websocket_handler(httpd_req_t *req)
 {
-    ESP_LOGD(TAG, "ACCESS: %s %s", req->uri, http_method_str(req->method));
-
     int sock_fd = httpd_req_to_sockfd(req);
-    
-    if (req->method == HTTP_GET)
+    ESP_LOGD(TAG, "ACCESS(WS): %s %s (fd%d)", req->uri, http_method_str(req->method), sock_fd);
+
+    if (req->method == HTTP_GET) // WebSocket connection establish
     {
-        // WebSocket connection establish
-        esp_ip4_addr_t connected_ip_addr = get_client_ip_addr(req, sock_fd);
-        bool override = false;
-        for(int exist_cli_i = 0; exist_cli_i < MAX_AP_CONN; exist_cli_i++) {
-            if (ws_cilents[exist_cli_i].ip_addr.addr == connected_ip_addr.addr) {
-                if(sock_fd != ws_cilents[exist_cli_i].fd) httpd_sess_trigger_close(server, ws_cilents[exist_cli_i].fd);
-                ws_cilents[exist_cli_i].fd = sock_fd;
-                ws_cilents[exist_cli_i].active_page = (wifiui_page_t*)req->user_ctx;
-                override = true;
-                ESP_LOGW(TAG, "[WebSocket] Update Websocket of device (" IPSTR ")", IP2STR(&connected_ip_addr));
-                break;
-            }
+        wifiui_page_t* page = (wifiui_page_t*)req->user_ctx;
+        esp_ip4_addr_t ip =  get_client_ip_addr(req, sock_fd);
+        client_info_t* client = find_client_info(&ip);
+        if(client != NULL)
+        {
+            client->ws_fd = sock_fd;
+            client->active_page = page;
         }
-        if(!override) {
-            int exist_cli_i;
-            for(exist_cli_i = 0; exist_cli_i < MAX_AP_CONN; exist_cli_i++) {
-                if (ws_cilents[exist_cli_i].fd < 0) {
-                    ws_cilents[exist_cli_i].fd = sock_fd;
-                    ws_cilents[exist_cli_i].ip_addr = connected_ip_addr;
-                    ws_cilents[exist_cli_i].active_page = (wifiui_page_t*)req->user_ctx;
-                    break;
-                }
-            }
-            if(exist_cli_i == MAX_AP_CONN) {
-                ESP_LOGW(TAG, "[WebSocket] Max WebSocket clients reached (fd: %d)", MAX_AP_CONN);
-            }
-        }
-        ESP_LOGI(TAG, "[WebSocket] WebSocket connection established from " IPSTR " (%d)", IP2STR(&connected_ip_addr), sock_fd);
+
+        ESP_LOGI(TAG, "WebSocket connection established from " IPSTR " (fd%d)", IP2STR(&ip), sock_fd);
         return ESP_OK;
     }
 
     // Websocket message receiving
-
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.type = HTTPD_WS_TYPE_BINARY;
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0); // to get frame length
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "[WebSocket] httpd_ws_recv_frame failed to get frame len with %d", ret);
+        ESP_LOGE(TAG, "Failed to get ws-frame len. %s.", esp_err_to_name(ret));
         return ret;
     }
     if (ws_pkt.len)
     {
         uint8_t *buf = (uint8_t*)malloc(ws_pkt.len + 1);        
         if (buf == NULL) {
-            ESP_LOGE(TAG, "[WebSocket] Failed to calloc memory for buf");
+            ESP_LOGE(TAG, "Failed to calloc memory for received ws buf. %s.", esp_err_to_name(ret));
             return ESP_ERR_NO_MEM;
         }
         buf[ws_pkt.len] = 0;
@@ -391,12 +462,12 @@ esp_err_t websocket_handler(httpd_req_t *req)
         ws_pkt.payload = buf;
         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len); // to receive frame payload
         if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "[WebSocket] httpd_ws_recv_frame failed with %d", ret);
+            ESP_LOGE(TAG, "Failed to get ws payload. %s.", esp_err_to_name(ret));
             free(buf);
             return ret;
         }
         wifiui_element_id element_id = *((wifiui_element_id*)(ws_pkt.payload));
-        ESP_LOGD(TAG, "[WebSocket] data recved from eid:%u", element_id);
+        ESP_LOGD(TAG, "ws data recved from eid:%u", element_id);
         wifiui_element_t* sent_element = wifiui_find_element(NULL, element_id);
         if(sent_element->system.on_recv_data != NULL)
         {
@@ -409,6 +480,8 @@ esp_err_t websocket_handler(httpd_req_t *req)
 
 esp_err_t ploty_js_get_handler(httpd_req_t *req)
 {
+    ESP_LOGD(TAG, "ACCESS(ploty.js): %s %s (fd%d)", req->uri, http_method_str(req->method), httpd_req_to_sockfd(req));
+
     const size_t len = ploty_min_js_gz_end - ploty_min_js_gz_start;
     httpd_resp_set_type(req, "application/javascript");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
@@ -429,25 +502,23 @@ void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_elemen
     {
         // そのelementがあるページがアクティブなクライアントにだけ送信する
         bool element_is_active = false;
-        if(ws_cilents[cli_i].active_page == NULL) continue;
-        for(int element_i = 0; element_i < ws_cilents[cli_i].active_page->element_count; element_i++)
+        if(!clients_info[cli_i].active) continue;
+        if(clients_info[cli_i].active_page == NULL) continue;
+        for(int element_i = 0; element_i < clients_info[cli_i].active_page->element_count; element_i++)
         {
-            if(ws_cilents[cli_i].active_page->elements[element_i]->id == element_info->id)
+            if(clients_info[cli_i].active_page->elements[element_i]->id == element_info->id)
             {
                 element_is_active = true;
                 break;
             }
         }
 
-        if(ws_cilents[cli_i].fd >= 0 && element_is_active)
+        if(clients_info[cli_i].ws_fd >= 0 && element_is_active)
         {
             ws_pkt.type = HTTPD_WS_TYPE_BINARY;
-            esp_err_t ret = httpd_ws_send_frame_async(server, ws_cilents[cli_i].fd, &ws_pkt);
+            esp_err_t ret = httpd_ws_send_frame_async(server, clients_info[cli_i].ws_fd, &ws_pkt);
             if (ret != ESP_OK) {
-                httpd_sess_trigger_close(server, ws_cilents[cli_i].fd);
-                ws_cilents[cli_i].fd = -1;
-                ws_cilents[cli_i].ip_addr.addr = 0;
-                ws_cilents[cli_i].active_page = NULL;
+                ESP_LOGE(TAG, "ws send failed. %s. page:%s eid:%u", esp_err_to_name(ret), clients_info[cli_i].active_page->uri, element_info->id);
             }
         }
     }
@@ -455,10 +526,10 @@ void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_elemen
 
 esp_err_t redirect_handler(httpd_req_t *req)
 {
-    ESP_LOGI(TAG, "Redirect else request: %s", req->uri);
+    ESP_LOGD(TAG, "ACCESS(redirect): %s %s (fd%d)", req->uri, http_method_str(req->method), httpd_req_to_sockfd(req));
     
-    char redirect_url[64];
-    snprintf(redirect_url, sizeof(redirect_url), "%s", top_page_uri);
+    char redirect_url[128];
+    snprintf(redirect_url, sizeof(redirect_url), "%s?redirect=1", top_page_uri);
 
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_hdr(req, "Location", redirect_url);
@@ -470,12 +541,12 @@ esp_err_t redirect_handler(httpd_req_t *req)
 
 esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
 {
+    ESP_LOGD(TAG, "ACCESS(404): %s %s (%d)", req->uri, http_method_str(req->method), httpd_req_to_sockfd(req));
     httpd_resp_set_status(req, "302 Temporary Redirect");
     httpd_resp_set_hdr(req, "Location", top_page_uri);
     // iOS requires content in the response to detect a captive portal, simply redirecting is not sufficient.
     httpd_resp_send(req, "Redirect to the top page", HTTPD_RESP_USE_STRLEN);
 
-    ESP_LOGI(TAG, "Redirecting to top page");
     return ESP_OK;
 }
 
@@ -520,7 +591,7 @@ void websoket_close(int fd)
 
     esp_err_t ret = httpd_ws_send_data(server, fd, &ws_pkt);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "[WebSocket] Failed to send close frame: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to send ws close frame. %s.", esp_err_to_name(ret));
     }
 }
 
@@ -582,25 +653,34 @@ esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst)
 void wifiui_print_server_status()
 {
     if(server == NULL) {
-        ESP_LOGI(TAG, "HTTP server: not started");
+        ESP_LOGW(TAG, "HTTP server: not started");
     } else {
         esp_netif_ip_info_t ap_ip = {0};
         get_current_ap_ip(&ap_ip);
-        ESP_LOGI(TAG, "HTTP server: " IPSTR, IP2STR(&ap_ip.ip));
+        printf("--------------------------------\n");
+        printf("HTTP server: " IPSTR "\n", IP2STR(&ap_ip.ip));
     }
-    char buf[64];
+
+    char buf[128]; buf[0] = '\0';
     int buff_off = 0;
     for(int cli_i = 0; cli_i < MAX_AP_CONN; cli_i++)
     {
-        buff_off += snprintf(buf + buff_off, sizeof(buf) - buff_off, IPSTR ":%s(%d), ", 
-            IP2STR(&ws_cilents[cli_i].ip_addr), 
-            ((ws_cilents[cli_i].active_page==NULL)? "--" : ws_cilents[cli_i].active_page->uri), 
-            ws_cilents[cli_i].fd);    
+        if(!clients_info[cli_i].active) continue;
+        buff_off += snprintf(buf + buff_off, sizeof(buf) - buff_off, IPSTR "-" MACSTR "-ws(fd%d %s), ", 
+            IP2STR(&clients_info[cli_i].ip), MAC2STR(clients_info[cli_i].mac), clients_info[cli_i].ws_fd, ((clients_info[cli_i].active_page==NULL)? "--" : clients_info[cli_i].active_page->uri));
     }
-    ESP_LOGI(TAG, "websocket clients: %s", buf);
+    printf("  clients: %s\n", buf);
+    
+    size_t fds = MAX_SOCKS;
+    int clinet_fds[MAX_SOCKS] = {0};
+    ESP_ERROR_CHECK(httpd_get_client_list(server, &fds, clinet_fds));
+    printf("  %u clinet sockets:", fds);
+    for(size_t i = 0U; i < fds; i++) { printf(" %d", clinet_fds[i]); }
+    printf("\n");
 
     esp_netif_ip_info_t sta_ip = {0};
     get_current_sta_ip(&sta_ip);
-    ESP_LOGI(TAG, "sta:: ip: " IPSTR, IP2STR(&sta_ip.ip));
-}
+    printf("IP as STA: " IPSTR "\n", IP2STR(&sta_ip.ip));
 
+    printf("--------------------------------\n");
+}

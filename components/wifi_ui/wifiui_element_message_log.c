@@ -63,17 +63,17 @@ void print_message(const wifiui_element_msglog_t* self, const char* message)
     wifiui_element_send_data(&self->common, message, strlen(message) + 1);
 }
 
-static bool output_mutex = false;
 static ssize_t my_write(int fd, const void *data, size_t size)
 {
     const char * const start = (const char *)data;
     const char * const end = (const char *)(data + size);
+    static bool in_tee = false;
 
-    if (!output_mutex && s_mirror_log_element != NULL)
+    if(!in_tee && s_mirror_log_element != NULL)
     {
-        output_mutex = true;
+        in_tee = true;
         wifiui_element_send_data(&s_mirror_log_element->common, start, size);
-        output_mutex = false;
+        in_tee = false;
     }
 
     // 元UARTへROM経由で出力
@@ -84,7 +84,7 @@ static ssize_t my_write(int fd, const void *data, size_t size)
 
 static int my_open(const char *path, int flags, int mode)
 {
-    return 3;
+    return 0;
 }
 
 static int my_close(int fd)

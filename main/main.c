@@ -17,7 +17,7 @@
 #include "wifiui_element_link.h"
 #include "wifiui_element_input.h"
 #include "wifiui_element_ap_connect_form.h"
-#include "wifiui_element_message_log.h"
+#include "wifiui_element_serial_log.h"
 #include "wifiui_element_timeplot.h"
 #include "wifiui_element_scatter3d_plot.h"
 #include "wifiui_element_scatterplot.h"
@@ -35,6 +35,8 @@ void status_send_task(void *arg) {
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         double time = esp_timer_get_time() / 1000000.0;
+
+        if(((int)time %10)==0) wifiui_print_server_status();
 
         if(dtext_time != NULL)
         {
@@ -118,7 +120,7 @@ void toggle_led(const wifiui_element_button_t * dummy, void* arg)
 }
 
 /* Text input callback */
-const wifiui_element_msglog_t* msglog = NULL;
+const wifiui_element_serialLog_t* msglog = NULL;
 void input_callback(char* str, void* param)
 {
     ESP_LOGI(TAG, "INPUT: %s", str);
@@ -126,7 +128,7 @@ void input_callback(char* str, void* param)
         size_t buf_len = 16 + strlen(str);
         char buf[buf_len];
         snprintf(buf, buf_len, "INPUT: %s\n", str);
-        if(msglog != NULL) msglog->print_message(msglog, buf);
+        if(msglog != NULL) msglog->print(msglog, buf);
     }
 
     if(strcmp(str, "mem") == 0)
@@ -146,11 +148,7 @@ void input_callback(char* str, void* param)
     else if(strcmp(str, "server") == 0)
     {
         // print server status
-        ESP_LOGI(TAG, "");
-        ESP_LOGI(TAG, "=== server info ===");
         wifiui_print_server_status();
-        ESP_LOGI(TAG, "===================");
-        ESP_LOGI(TAG, "");
     }
 }
 
@@ -179,9 +177,9 @@ void app_main(void)
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_led = wifiui_element_dynamic_text("LED status: --")));
 
-    /* Message log & Text input sample */
+    /* Serial log & Text input sample */
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Mirror Console", 2));
-    wifiui_add_element(top_page, (const wifiui_element_t*) (msglog = wifiui_element_message_log(true)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (msglog = wifiui_element_serial_log(true)));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_input("Send", input_callback, NULL, NULL, true));
 
     /* Access Point (AP) connection sample  */

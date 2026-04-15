@@ -134,8 +134,8 @@ wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto
 ```
 > ![alt text](doc/res/image-15.png)
 
-#### メッセージログ
-ESPから送信されるメッセージの受信ログを配置する
+#### Serialログ
+ESPから送信されるSerial出力窓を配置する
 - オプションとして`ESP_LOG()`系マクロのコピーログを作成することができる
 ```c
 #include "wifiui_element_message_log.h"

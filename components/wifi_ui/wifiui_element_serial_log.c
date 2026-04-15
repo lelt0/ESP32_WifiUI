@@ -2,23 +2,23 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/stream_buffer.h"
-#include "wifiui_element_message_log.h"
+#include "wifiui_element_serial_log.h"
 #include "dstring.h"
 #include "esp_log.h"
 #include "esp_vfs.h"
 #include "esp_rom_serial_output.h"
 
 static dstring_t* create_partial_html(const wifiui_element_t* self);
-static void mirror_log_init(const wifiui_element_msglog_t* mirror_log_element);
-static void print_message(const wifiui_element_msglog_t* self, const char* message);
+static void mirror_log_init(const wifiui_element_serialLog_t* mirror_log_element);
+static void print_log(const wifiui_element_serialLog_t* self, const char* message);
 static void init_custom_stdout(void);
 
-const wifiui_element_msglog_t * wifiui_element_message_log(bool mirror_log_mode)
+const wifiui_element_serialLog_t * wifiui_element_serial_log(bool mirror_log_mode)
 {
-    wifiui_element_msglog_t* self = (wifiui_element_msglog_t*)malloc(sizeof(wifiui_element_msglog_t));
+    wifiui_element_serialLog_t* self = (wifiui_element_serialLog_t*)malloc(sizeof(wifiui_element_serialLog_t));
     set_default_common(&self->common, WIFIUI_MESSAGE_LOG, create_partial_html);
 
-    self->print_message = print_message;
+    self->print = print_log;
     if(mirror_log_mode) {
         mirror_log_init(self);
     }
@@ -28,10 +28,10 @@ const wifiui_element_msglog_t * wifiui_element_message_log(bool mirror_log_mode)
 
 dstring_t* create_partial_html(const wifiui_element_t* self)
 {
-    wifiui_element_msglog_t* self_mlog = (wifiui_element_msglog_t*)self;
+    wifiui_element_serialLog_t* self_mlog = (wifiui_element_serialLog_t*)self;
     dstring_t* html = dstring_create(512);
     dstring_appendf(html, 
-        "<textarea id='%s' class='message_log' readonly></textarea>"
+        "<textarea id='%s' class='serial_log' readonly></textarea>"
         "<script>"
         "{"
             "const terminal = document.getElementById('%s');"
@@ -47,7 +47,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
     return html;
 }
 static StreamBufferHandle_t ws_stream;
-static const wifiui_element_msglog_t* s_mirror_log_element = NULL;
+static const wifiui_element_serialLog_t* s_mirror_log_element = NULL;
 static void ws_tee_task(void *arg)
 {
     char* buf = malloc(128);
@@ -59,7 +59,7 @@ static void ws_tee_task(void *arg)
     }
     free(buf);
 }
-void mirror_log_init(const wifiui_element_msglog_t* mirror_log_element)
+void mirror_log_init(const wifiui_element_serialLog_t* mirror_log_element)
 {
     if(s_mirror_log_element != NULL)
     {
@@ -73,7 +73,7 @@ void mirror_log_init(const wifiui_element_msglog_t* mirror_log_element)
     init_custom_stdout();
 }
 
-void print_message(const wifiui_element_msglog_t* self, const char* message)
+void print_log(const wifiui_element_serialLog_t* self, const char* message)
 {
     wifiui_element_send_data(&self->common, message, strlen(message) + 1);
 }

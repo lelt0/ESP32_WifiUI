@@ -513,7 +513,7 @@ void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_elemen
             ws_pkt.type = HTTPD_WS_TYPE_BINARY;
             esp_err_t ret = httpd_ws_send_frame_async(server, clients_info[cli_i].ws_fd, &ws_pkt);
             if (ret != ESP_OK) {
-                ESP_LOGE(TAG, "ws send failed. %s. page:%s eid:%u", esp_err_to_name(ret), clients_info[cli_i].active_page->uri, element_info->id);
+                //ESP_LOGE(TAG, "ws send failed. %s. page:%s eid:%u", esp_err_to_name(ret), clients_info[cli_i].active_page->uri, element_info->id);
             }
         }
     }

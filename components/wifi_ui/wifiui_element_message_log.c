@@ -1,5 +1,7 @@
 #include <string.h>
 #include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/stream_buffer.h"
 #include "wifiui_element_message_log.h"
 #include "dstring.h"
 #include "esp_log.h"
@@ -44,8 +46,19 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
     );
     return html;
 }
-
+static StreamBufferHandle_t ws_stream;
 static const wifiui_element_msglog_t* s_mirror_log_element = NULL;
+static void ws_tee_task(void *arg)
+{
+    char* buf = malloc(128);
+    while (true) {
+        size_t len = xStreamBufferReceive(ws_stream, buf, sizeof(buf), portMAX_DELAY);
+        if (len > 0 && s_mirror_log_element) {
+            wifiui_element_send_data(&s_mirror_log_element->common, buf, len);
+        }
+    }
+    free(buf);
+}
 void mirror_log_init(const wifiui_element_msglog_t* mirror_log_element)
 {
     if(s_mirror_log_element != NULL)
@@ -55,6 +68,8 @@ void mirror_log_init(const wifiui_element_msglog_t* mirror_log_element)
     }
 
     s_mirror_log_element = mirror_log_element;
+    ws_stream = xStreamBufferCreate(512, 1);
+    xTaskCreatePinnedToCore(ws_tee_task, "ws_tee", 4096, NULL, 3, NULL, 0);
     init_custom_stdout();
 }
 
@@ -67,14 +82,8 @@ static ssize_t my_write(int fd, const void *data, size_t size)
 {
     const char * const start = (const char *)data;
     const char * const end = (const char *)(data + size);
-    static bool in_tee = false;
 
-    if(!in_tee && s_mirror_log_element != NULL)
-    {
-        in_tee = true;
-        wifiui_element_send_data(&s_mirror_log_element->common, start, size);
-        in_tee = false;
-    }
+    if (ws_stream) xStreamBufferSend(ws_stream, start, size, 0);
 
     // 元UARTへROM経由で出力
     const char* o = start;

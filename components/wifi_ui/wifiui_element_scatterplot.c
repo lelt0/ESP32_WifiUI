@@ -12,7 +12,6 @@ const wifiui_element_scatterplot_t * wifiui_element_scatterplot(
 {
     wifiui_element_scatterplot_t* self = (wifiui_element_scatterplot_t*)malloc(sizeof(wifiui_element_scatterplot_t));
     set_default_common(&self->common, WIFIUI_SCATTERPLOT, create_partial_html);
-    self->common.system.use_websocket = true;
     self->common.system.use_ploty = true;
 
     self->x_label = strdup(x_label);

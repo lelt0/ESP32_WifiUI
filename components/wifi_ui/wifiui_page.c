@@ -20,7 +20,7 @@ wifiui_page_t * wifiui_create_page(const char * title)
     }    
     page->elements = NULL;
     page->element_count = 0;
-    page->use_websocket = false;
+    page->use_websocket = true;
     page->use_ploty = false;
 
     register_page(page);
@@ -39,8 +39,6 @@ size_t wifiui_add_element(wifiui_page_t* page, const wifiui_element_t* element)
         page->elements = (const wifiui_element_t**)realloc(page->elements, sizeof(wifiui_element_t*) * (page->element_count + 1));
     }
     page->elements[page->element_count++] = element;
-
-    if(element->system.use_websocket || element->system.on_recv_data != NULL) page->use_websocket = true;
 
     if(element->system.use_ploty) page->use_ploty = true;
 
@@ -157,43 +155,49 @@ function fit_textarea_height(id){ t = document.getElementById(id); t.style.heigh
 )";
 
 const char * html_websocket_template = R"(
+<div id='ws_status'>ws_status</div>
 <script>
 let ws = new WebSocket('ws://' + location.host + location.pathname + '/ws');
 let ws_actions = {};
+let last_ws_pong_time_ms = Date.now();
 ws.binaryType = 'arraybuffer';
 ws.onmessage = function(evt) {
- var data = new DataView(event.data);
- let eid = data.getUint16(0, true);
- if (eid in ws_actions) { ws_actions[eid](event.data.slice(2)); }
+ if(evt.data.byteLength === 0) { last_ws_pong_time_ms = Date.now();
+ }else{
+  var d = new DataView(event.data);
+  let eid = d.getUint16(0, true);
+  if (eid in ws_actions) { ws_actions[eid](event.data.slice(2)); }
+ }
 };
 function cstr2str(array) {
- const data = new Uint8Array(array);
- const nulIndex = data.indexOf(0);
- const slice = nulIndex >= 0 ? data.subarray(0, nulIndex) : data;
- const text = new TextDecoder("utf-8").decode(slice);
- return text;
+ const d = new Uint8Array(array);
+ const i = d.indexOf(0);
+ return new TextDecoder('utf-8').decode(i >= 0 ? d.subarray(0, i) : d);
 }
 function str2cstr(str) {
- const encoder = new TextEncoder();
- const bytes = encoder.encode(str);
- const cstr = new Uint8Array(bytes.length + 1);
- cstr.set(bytes, 0);
- cstr[bytes.length] = 0; // NULL終端
+ const e = new TextEncoder();
+ const d = e.encode(str);
+ const cstr = new Uint8Array(d.length + 1);
+ cstr.set(d, 0);
+ cstr[d.length] = 0; //NULL
  return cstr;
 }
-function ws_send_with_eid(eid, array) {
- const header = new Uint8Array(2);
- header[0] = eid & 0xff;
- header[1] = (eid >> 8) & 0xff;
- const payload = new Uint8Array(header.length + array.length);
- payload.set(header, 0);
- payload.set(array, header.length);
- ws.send(payload);
+function ws_send_with_eid(eid, d) {
+ const h = new Uint8Array(2);
+ h[0] = eid & 0xff;
+ h[1] = (eid >> 8) & 0xff;
+ const pd = new Uint8Array(h.length + d.length);
+ pd.set(h, 0);
+ pd.set(d, h.length);
+ ws.send(pd);
 }
-window.addEventListener("beforeunload", () => {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.close();
-  }
-});
+function ws_ping() { ws_send_with_eid(0, str2cstr(location.pathname)); }
+window.addEventListener('beforeunload',()=>{ if(ws.readyState===WebSocket.OPEN) ws.close(); });
+setInterval(ws_ping, 1000);
+setInterval(()=>{ 
+    document.getElementById('ws_status').innerText = 'ws_status: ' + Date.now() + '/' + last_ws_pong_time_ms + ' ms';
+    if(Date.now() - last_ws_pong_time_ms > 3000) { document.getElementById('ws_status').style.background = '#f00'; } else { document.getElementById('ws_status').style.background = '#0f0'; }
+  },
+  100);
 </script>
 )";

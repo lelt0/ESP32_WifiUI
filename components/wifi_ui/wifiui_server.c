@@ -3,6 +3,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include "esp_timer.h"
 
 #include "nvs_flash.h"
 #include "esp_http_server.h"
@@ -16,23 +17,32 @@
 #include "wifiui_server.h"
 
 #define MAX_AP_CONN 2
+#define MAX_CLIENTS 2 // AP clients + LAN access
 #define MAX_SOCKS 7
 
 static const char * TAG = "wifiui_server";
 extern const uint8_t ploty_min_js_gz_start[] asm("_binary_ploty_min_js_gz_start");
 extern const uint8_t ploty_min_js_gz_end[]   asm("_binary_ploty_min_js_gz_end");
 
+// 接続中のclient管理
 typedef struct {
     bool active;
-    uint8_t mac[6];
     esp_ip4_addr_t ip;
-    int ws_fd;
     const wifiui_page_t* active_page;
+    int http_fd;
+    int ws_fd;
+    uint64_t last_ping_time_us;
 } client_info_t;
-static client_info_t clients_info[MAX_AP_CONN];
-static void clear_client_info(client_info_t* cinfo){ cinfo->active = false; memset(cinfo->mac, 0, 6); cinfo->ip.addr = 0; cinfo->ws_fd=-1; cinfo->active_page = NULL; }
-static client_info_t* find_client_info_from_mac(uint8_t mac[6]){ if(!mac) return NULL; for(int i=0; i<MAX_AP_CONN; i++){ if(clients_info[i].active && memcmp(clients_info[i].mac, mac, 6)==0) return &clients_info[i]; } return NULL; }
-static client_info_t* find_client_info(esp_ip4_addr_t* ip){ if(!ip) return NULL; for(int i=0; i<MAX_AP_CONN; i++){ if(clients_info[i].active && clients_info[i].ip.addr == ip->addr) return &clients_info[i]; } return NULL; }
+static client_info_t clients_info[MAX_CLIENTS];
+static void clear_client_info(client_info_t* cinfo){ cinfo->active = false; cinfo->ip.addr = 0; cinfo->active_page = NULL; cinfo->http_fd=-1; cinfo->ws_fd=-1; cinfo->last_ping_time_us = 0; }
+static client_info_t* find_free_client(){ for(int i=0;i<MAX_CLIENTS;i++){ if(!clients_info[i].active) return (clients_info+i); } return NULL; }
+static client_info_t* find_client(esp_ip4_addr_t ip){ for(int i=0;i<MAX_CLIENTS;i++){ if(clients_info[i].active && clients_info[i].ip.addr == ip.addr) return &clients_info[i]; } return NULL; }
+static void close_client(client_info_t* client);
+static void close_session(int fd);
+static void close_unused_clients();
+static void print_client_info(client_info_t* cinfo){ if(!cinfo) return; printf("active:%c " IPSTR " page:%s(H%d/W%d) tim:%llums\n", (cinfo->active?'T':'F'), IP2STR(&cinfo->ip), (cinfo->active_page?cinfo->active_page->uri:"NULL"), cinfo->http_fd, cinfo->ws_fd, cinfo->last_ping_time_us/1000); }
+static void wifiui_ws_send_pong(int fd);
+static esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd);
 
 static httpd_handle_t server = NULL;
 static const char * top_page_uri = NULL;
@@ -54,8 +64,6 @@ static esp_err_t redirect_handler(httpd_req_t *req);
 static esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err); // HTTP Error (404) Handler - Redirects all requests to the root page
 
 static void create_ssid(char * dst, unsigned int dst_len);
-static esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd);
-static void websoket_close(int fd);
 static esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst);
 static esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst);
 
@@ -66,7 +74,7 @@ void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_pag
         return;
     }
 
-    for(int i = 0; i < MAX_AP_CONN; i++) clear_client_info(&clients_info[i]);
+    for(int i = 0; i < MAX_CLIENTS; i++) clear_client_info(&clients_info[i]);
     top_page_uri = top_page->uri;
 
     /*
@@ -285,65 +293,17 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id
     {
         wifi_event_ap_staconnected_t *event = (wifi_event_ap_staconnected_t*) event_data;
         ESP_LOGD(TAG, "New AP client connected. mac:" MACSTR, MAC2STR(event->mac));
-
-        for(int i = 0; i < MAX_AP_CONN; i++) {
-            if(!clients_info[i].active) {
-                clear_client_info(&clients_info[i]);
-                clients_info[i].active = true;
-                memcpy(clients_info[i].mac, event->mac, 6);
-                break;
-            }
-        }
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_ASSIGNED_IP_TO_CLIENT)
     {
         ip_event_assigned_ip_to_client_t *event = (ip_event_assigned_ip_to_client_t*) event_data;
         ESP_LOGI(TAG, "IP assigned. mac:" MACSTR " ip:" IPSTR, MAC2STR(event->mac), IP2STR(&event->ip));
-        
-        client_info_t* client = find_client_info_from_mac(event->mac);
-        if(client != NULL) client->ip = event->ip;
+        close_unused_clients();
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED)
     {
         wifi_event_ap_stadisconnected_t *event = event_data;
         ESP_LOGI(TAG, "AP client disconnected. mac:" MACSTR, MAC2STR(event->mac));
-
-        client_info_t* client = find_client_info_from_mac(event->mac);
-        if(client != NULL)
-        {
-            size_t fds = MAX_SOCKS;
-            int alive_fds[MAX_SOCKS] = {0};
-            ESP_ERROR_CHECK(httpd_get_client_list(server, &fds, alive_fds));
-            for(int fd_i = 0; fd_i < fds; fd_i++)
-            {
-                bool fd_is_discon_client = false;
-                struct sockaddr_storage addr;
-                socklen_t addr_len = sizeof(addr);
-                if (getpeername(alive_fds[fd_i], (struct sockaddr *)&addr, &addr_len) == 0)
-                {
-                    if (addr.ss_family == AF_INET) {
-                        struct sockaddr_in *a = (struct sockaddr_in *)&addr;
-                        if(a->sin_addr.s_addr == client->ip.addr) fd_is_discon_client = true;
-                    }
-                    else if(addr.ss_family == AF_INET6)
-                    {
-                        struct sockaddr_in6 *a = (struct sockaddr_in6 *)&addr;
-                        if(a->sin6_addr.un.u32_addr[3] == client->ip.addr) fd_is_discon_client = true;
-                    }
-                }
-
-                if(fd_is_discon_client)
-                {
-                    struct linger so_linger;
-                    so_linger.l_onoff = 1;
-                    so_linger.l_linger = 0;
-                    setsockopt(alive_fds[fd_i], SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
-                    httpd_sess_trigger_close(server, alive_fds[fd_i]);
-                }
-            }
-
-            clear_client_info(client);
-        }
     }
 }
 
@@ -361,6 +321,16 @@ esp_err_t page_access_handler(httpd_req_t *req)
         wifiui_page_t * page = pages[page_i];
         if(strncmp(req->uri, page->uri, uri_len_without_query) == 0)
         {
+            esp_ip4_addr_t ip = get_client_ip_addr(req, sock_fd);
+            client_info_t* client = find_client(ip);
+            if(!client) client = find_free_client();
+            if(client)
+            {
+                client->active = true;
+                client->ip = ip;
+                client->http_fd = sock_fd;
+            }
+
             switch (req->method)
             {
                 case HTTP_GET:
@@ -369,18 +339,6 @@ esp_err_t page_access_handler(httpd_req_t *req)
                     dstring_t* html = wifiui_generate_page_html(page);
                     httpd_resp_send(req, html->str, HTTPD_RESP_USE_STRLEN);
                     dstring_free(html);
-
-                    esp_ip4_addr_t ip =  get_client_ip_addr(req, sock_fd);
-                    client_info_t* client = find_client_info(&ip);
-                    if(client != NULL)
-                    {
-                        bool redirect = (strstr(req->uri, "redirect=1") != NULL);
-                        if(!redirect && client->active_page != page) // ページへのダイレクトアクセスのみclients_info[].ws_fdをクリア（redirectは無視）
-                        {
-                            client->ws_fd = -1;
-                            client->active_page = page;
-                        }
-                    }
                     
                     ESP_LOGI(TAG, "HTTP %s served. (fd%d)", req->uri, sock_fd);
                     return ESP_OK;
@@ -423,16 +381,23 @@ esp_err_t websocket_handler(httpd_req_t *req)
 
     if (req->method == HTTP_GET) // WebSocket connection establish
     {
-        wifiui_page_t* page = (wifiui_page_t*)req->user_ctx;
-        esp_ip4_addr_t ip =  get_client_ip_addr(req, sock_fd);
-        client_info_t* client = find_client_info(&ip);
-        if(client != NULL)
+        esp_ip4_addr_t ip = get_client_ip_addr(req, sock_fd);
+        client_info_t* client = find_client(ip);
+        if(!client) client = find_free_client();
+        if(client)
         {
+            wifiui_page_t* page = (wifiui_page_t*)req->user_ctx;
+            client->active = true;
+            client->ip = ip;
             client->ws_fd = sock_fd;
             client->active_page = page;
         }
+        else
+        {
+            ESP_LOGW(TAG, "Reached MAX Clients! (MAX:%d)", MAX_CLIENTS);
+        }
 
-        ESP_LOGI(TAG, "WebSocket connection established from " IPSTR " (fd%d)", IP2STR(&ip), sock_fd);
+        ESP_LOGI(TAG, "WebSocket connection established by fd%d", sock_fd);
         return ESP_OK;
     }
 
@@ -463,10 +428,22 @@ esp_err_t websocket_handler(httpd_req_t *req)
         }
         wifiui_element_id element_id = *((wifiui_element_id*)(ws_pkt.payload));
         ESP_LOGD(TAG, "ws data recved from eid:%u", element_id);
-        wifiui_element_t* sent_element = wifiui_find_element(NULL, element_id);
-        if(sent_element->system.on_recv_data != NULL)
+        uint8_t* payload_data = ws_pkt.payload + sizeof(wifiui_element_id);
+        size_t payload_len = ws_pkt.len - sizeof(wifiui_element_id);
+        if(element_id == 0) // id0はシステム疎通確認
         {
-            sent_element->system.on_recv_data(sent_element, ws_pkt.payload + sizeof(wifiui_element_id), ws_pkt.len - sizeof(wifiui_element_id));
+            esp_ip4_addr_t ip = get_client_ip_addr(req, sock_fd);
+            client_info_t* client = find_client(ip);
+            if(client) client->last_ping_time_us = esp_timer_get_time();
+            wifiui_ws_send_pong(sock_fd);
+        }
+        else
+        {
+            wifiui_element_t* sent_element = wifiui_find_element(NULL, element_id);
+            if(sent_element->system.on_recv_data != NULL)
+            {
+                sent_element->system.on_recv_data(sent_element, payload_data, payload_len);
+            }
         }
         free(buf);
     }
@@ -493,30 +470,41 @@ void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_elemen
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.payload = (uint8_t *)data;
     ws_pkt.len = len;
-    for(int cli_i = 0; cli_i < MAX_AP_CONN; cli_i++)
+    for(int cli_i = 0; cli_i < MAX_CLIENTS; cli_i++)
     {
         // そのelementがあるページがアクティブなクライアントにだけ送信する
         bool element_is_active = false;
-        if(!clients_info[cli_i].active) continue;
-        if(clients_info[cli_i].active_page == NULL) continue;
-        for(int element_i = 0; element_i < clients_info[cli_i].active_page->element_count; element_i++)
+        client_info_t* client = &clients_info[cli_i];
+        if(!client->active) continue;
+        if(client->active_page == NULL) continue;
+        for(int element_i = 0; element_i < client->active_page->element_count; element_i++)
         {
-            if(clients_info[cli_i].active_page->elements[element_i]->id == element_info->id)
+            if(client->active_page->elements[element_i]->id == element_info->id)
             {
                 element_is_active = true;
                 break;
             }
         }
 
-        if(clients_info[cli_i].ws_fd >= 0 && element_is_active)
+        if(client->ws_fd >= 0 && element_is_active)
         {
             ws_pkt.type = HTTPD_WS_TYPE_BINARY;
-            esp_err_t ret = httpd_ws_send_frame_async(server, clients_info[cli_i].ws_fd, &ws_pkt);
-            if (ret != ESP_OK) {
-                //ESP_LOGE(TAG, "ws send failed. %s. page:%s eid:%u", esp_err_to_name(ret), clients_info[cli_i].active_page->uri, element_info->id);
-            }
+            esp_err_t ret = httpd_ws_send_frame_async(server, client->ws_fd, &ws_pkt);
+            if (ret != ESP_OK) { /* failed */ }
         }
     }
+}
+
+void wifiui_ws_send_pong(int fd)
+{
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+    ws_pkt.payload = NULL;
+    ws_pkt.len = 0;
+
+    esp_err_t ret = httpd_ws_send_frame_async(server, fd, &ws_pkt);
+    if (ret != ESP_OK) { /* failed */ }
 }
 
 esp_err_t redirect_handler(httpd_req_t *req)
@@ -576,17 +564,75 @@ esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd)
     }
 }
 
-void websoket_close(int fd)
+void close_session(int fd)
 {
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.type = HTTPD_WS_TYPE_CLOSE;
-    ws_pkt.payload = NULL;
-    ws_pkt.len = 0;
+    struct linger so_linger;
+    so_linger.l_onoff = 1;
+    so_linger.l_linger = 0;
+    setsockopt(fd, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
+    httpd_sess_trigger_close(server, fd);
+}
 
-    esp_err_t ret = httpd_ws_send_data(server, fd, &ws_pkt);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to send ws close frame. %s.", esp_err_to_name(ret));
+void close_client(client_info_t* client)
+{
+    if(!client) return;
+    close_session(client->http_fd);
+    close_session(client->ws_fd);
+    clear_client_info(client);
+}
+
+void close_unused_clients()
+{
+    // 古いclientをclose
+    uint64_t now_us = esp_timer_get_time();
+    for(int cli_i = 0; cli_i < MAX_CLIENTS; cli_i++)
+    {
+        client_info_t* client = &clients_info[cli_i];
+        if(!client->active) continue;
+        if(now_us - client->last_ping_time_us > 3000000) close_client(client);
+    }
+
+    // 管理していないのにhttpdに残っているws_fdをclose
+    size_t fds = MAX_SOCKS;
+    int alive_fds[MAX_SOCKS] = {0};
+    ESP_ERROR_CHECK(httpd_get_client_list(server, &fds, alive_fds));
+    for(int fd_i = 0; fd_i < fds; fd_i++)
+    {
+        int fd = alive_fds[fd_i];
+        httpd_ws_client_info_t fd_protocol = httpd_ws_get_fd_info(server, fd);
+        if(fd_protocol == HTTPD_WS_CLIENT_INVALID)
+        {
+            close_session(fd);
+        }
+        else
+        {
+            bool is_client = false;
+            for(int cli_i = 0; cli_i < MAX_CLIENTS; cli_i++)
+            {
+                client_info_t* client = &clients_info[cli_i];
+                if(!client->active) continue;
+                if(fd == client->http_fd) { is_client = true; break; }
+                if(fd == client->ws_fd) { is_client = true; break; }
+            }
+            if(!is_client) close_session(fd);
+        }
+    }
+
+    // 管理しているけどhttpdにないws_fdをclose
+    fds = MAX_SOCKS;
+    ESP_ERROR_CHECK(httpd_get_client_list(server, &fds, alive_fds));
+    for(int cli_i = 0; cli_i < MAX_CLIENTS; cli_i++)
+    {
+        client_info_t* client = &clients_info[cli_i];
+        if(!client->active) continue;
+
+        bool alive_client = false;
+        for(int fd_i = 0; fd_i < fds; fd_i++)
+        {
+            if(client->http_fd == alive_fds[fd_i]){ alive_client = true; break; }
+            if(client->ws_fd == alive_fds[fd_i]){ alive_client = true; break; }
+        }
+        if(!alive_client) close_client(client);
     }
 }
 
@@ -655,27 +701,32 @@ void wifiui_print_server_status()
         printf("--------------------------------\n");
         printf("HTTP server: " IPSTR "\n", IP2STR(&ap_ip.ip));
     }
-
-    char buf[128]; buf[0] = '\0';
-    int buff_off = 0;
-    for(int cli_i = 0; cli_i < MAX_AP_CONN; cli_i++)
-    {
-        if(!clients_info[cli_i].active) continue;
-        buff_off += snprintf(buf + buff_off, sizeof(buf) - buff_off, IPSTR "-" MACSTR "-ws(fd%d %s), ", 
-            IP2STR(&clients_info[cli_i].ip), MAC2STR(clients_info[cli_i].mac), clients_info[cli_i].ws_fd, ((clients_info[cli_i].active_page==NULL)? "--" : clients_info[cli_i].active_page->uri));
-    }
-    printf("  clients: %s\n", buf);
-    
     size_t fds = MAX_SOCKS;
     int clinet_fds[MAX_SOCKS] = {0};
     ESP_ERROR_CHECK(httpd_get_client_list(server, &fds, clinet_fds));
     printf("  %u clinet sockets:", fds);
-    for(size_t i = 0U; i < fds; i++) { printf(" %d", clinet_fds[i]); }
+    for(size_t i = 0U; i < fds; i++)
+    {
+        httpd_ws_client_info_t fd_protocol = httpd_ws_get_fd_info(server, clinet_fds[i]);
+        char fd_protocol_char = (fd_protocol==HTTPD_WS_CLIENT_HTTP? 'H': (fd_protocol==HTTPD_WS_CLIENT_WEBSOCKET? 'W':'x'));
+        printf(" %d%c", clinet_fds[i], fd_protocol_char);
+    }
     printf("\n");
 
     esp_netif_ip_info_t sta_ip = {0};
     get_current_sta_ip(&sta_ip);
     printf("IP as STA: " IPSTR "\n", IP2STR(&sta_ip.ip));
+
+    puts("clients:");
+    for(int cli_i = 0; cli_i < MAX_CLIENTS; cli_i++)
+    {
+        if(!clients_info[cli_i].active) continue;
+        printf("  " IPSTR " %s(H%d/W%d) tim:%llums\n",
+            IP2STR(&clients_info[cli_i].ip), ((clients_info[cli_i].active_page==NULL)? "--" : clients_info[cli_i].active_page->uri),
+            clients_info[cli_i].http_fd, clients_info[cli_i].ws_fd,
+            clients_info[cli_i].last_ping_time_us / 1000
+        );
+    }
 
     printf("--------------------------------\n");
 }

@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <assert.h>
 
-static wifiui_element_id next_id = 0;
+static wifiui_element_id next_id = 1; // id=0はシステム疎通確認用
 static wifiui_element_id new_id();
 
 void set_default_common(wifiui_element_t* dst, wifiui_element_type type, create_partial_html_f create_html_func)
@@ -14,7 +14,6 @@ void set_default_common(wifiui_element_t* dst, wifiui_element_type type, create_
     snprintf(dst->id_str, sizeof(dst->id_str), "%04X", dst->id);
     dst->system.create_partial_html = create_html_func;
     dst->system.on_post_from_this_element = NULL;
-    dst->system.use_websocket = false;
     dst->system.on_recv_data = NULL;
     dst->system.use_ploty = false;
 }

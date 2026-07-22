@@ -10,7 +10,6 @@ const wifiui_element_input_t * wifiui_element_input(const char* button_label, vo
 {
     wifiui_element_input_t* self = (wifiui_element_input_t*)malloc(sizeof(wifiui_element_input_t));
     set_default_common(&self->common, WIFIUI_INPUT, create_partial_html);
-    self->common.system.use_websocket = true;
     self->common.system.on_recv_data = on_recv_data;
 
     self->button_label = ((button_label != NULL)? strdup(button_label) : "Send");

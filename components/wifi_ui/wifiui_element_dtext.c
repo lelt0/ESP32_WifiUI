@@ -11,7 +11,6 @@ const wifiui_element_dtext_t * wifiui_element_dynamic_text(const char* text)
 {
     wifiui_element_dtext_t* self = (wifiui_element_dtext_t*)malloc(sizeof(wifiui_element_dtext_t));
     set_default_common(&self->common, WIFIUI_DYNAMIC_TEXT, create_partial_html);
-    self->common.system.use_websocket = true;
     self->common.system.on_recv_data = on_recv_data;
 
     self->text = strdup(text);

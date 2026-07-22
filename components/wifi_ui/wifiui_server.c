@@ -490,7 +490,7 @@ void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_elemen
         {
             ws_pkt.type = HTTPD_WS_TYPE_BINARY;
             esp_err_t ret = httpd_ws_send_frame_async(server, client->ws_fd, &ws_pkt);
-            if (ret != ESP_OK) { /* failed */ }
+            if (ret != ESP_OK) close_unused_clients();
         }
     }
 }
@@ -504,7 +504,7 @@ void wifiui_ws_send_pong(int fd)
     ws_pkt.len = 0;
 
     esp_err_t ret = httpd_ws_send_frame_async(server, fd, &ws_pkt);
-    if (ret != ESP_OK) { /* failed */ }
+    if (ret != ESP_OK) close_unused_clients();
 }
 
 esp_err_t redirect_handler(httpd_req_t *req)
@@ -576,8 +576,8 @@ void close_session(int fd)
 void close_client(client_info_t* client)
 {
     if(!client) return;
-    close_session(client->http_fd);
-    close_session(client->ws_fd);
+    if(client->http_fd>=0) close_session(client->http_fd);
+    if(client->ws_fd>=0) close_session(client->ws_fd);
     clear_client_info(client);
 }
 
@@ -589,7 +589,7 @@ void close_unused_clients()
     {
         client_info_t* client = &clients_info[cli_i];
         if(!client->active) continue;
-        if(now_us - client->last_ping_time_us > 3000000) close_client(client);
+        if(now_us - client->last_ping_time_us > 5000000ULL) close_client(client);
     }
 
     // 管理していないのにhttpdに残っているws_fdをclose

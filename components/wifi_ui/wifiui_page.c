@@ -155,7 +155,7 @@ function fit_textarea_height(id){ t = document.getElementById(id); t.style.heigh
 )";
 
 const char * html_websocket_template = R"(
-<div id='ws_status'>ws_status</div>
+<div id='sv_stat'>server_status</div>
 <script>
 let ws = new WebSocket('ws://' + location.host + location.pathname + '/ws');
 let ws_actions = {};
@@ -194,10 +194,11 @@ function ws_send_with_eid(eid, d) {
 function ws_ping() { ws_send_with_eid(0, str2cstr(location.pathname)); }
 window.addEventListener('beforeunload',()=>{ if(ws.readyState===WebSocket.OPEN) ws.close(); });
 setInterval(ws_ping, 1000);
-setInterval(()=>{ 
-    document.getElementById('ws_status').innerText = 'ws_status: ' + Date.now() + '/' + last_ws_pong_time_ms + ' ms';
-    if(Date.now() - last_ws_pong_time_ms > 3000) { document.getElementById('ws_status').style.background = '#f00'; } else { document.getElementById('ws_status').style.background = '#0f0'; }
-  },
-  100);
+setInterval(()=>{
+  const stat_ele = document.getElementById('sv_stat');
+  const hbeat_sec = (Date.now() - last_ws_pong_time_ms) / 1000;
+  stat_ele.innerText = 'server status: ' + hbeat_sec.toFixed(3);
+  stat_ele.style.background = (hbeat_sec > 5? '#f00': (hbeat_sec > 3? '#ff0': '#0f0'));
+ },100);
 </script>
 )";

@@ -21,7 +21,8 @@ typedef enum {
     WIFIUI_MESSAGE_LOG,
     WIFIUI_TIMEPLOT,
     WIFIUI_SCATTERPLOT,
-    WIFIUI_SCALLTER3D_PLOT
+    WIFIUI_SCALLTER3D_PLOT,
+    WIFIUI_SLIDER
 } wifiui_element_type;
 
 typedef struct wifiui_element wifiui_element_t;

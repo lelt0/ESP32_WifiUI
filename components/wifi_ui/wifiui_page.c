@@ -138,6 +138,7 @@ img, video { display: block; margin: 1em auto; max-width: 100%%; max-height: 100
 
 .plot_container canvas { display: block; margin: 1em auto; background: #fff; border: 1px solid #eee;}
 .inline { display: inline-block; margin: 0.5em; width: auto;}
+.width_fixed {white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .wrap_text { white-space: pre-wrap; }
 .multi_input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 0.5em; margin-bottom: -0.4em; }
 .single_input { font-family: inherit; font-size: inherit; line-height: inherit; width: 100%%; box-sizing: border-box; resize: none; overflow: hidden; min-height: 1.6em; padding: 0.5em; white-space: pre-wrap; word-break: break-all; border: 1px solid #ccc; border-radius: 0.5em; }
@@ -161,28 +162,34 @@ let ws = new WebSocket('ws://' + location.host + location.pathname + '/ws');
 let ws_actions = {};
 let last_ws_pong_time_ms = Date.now();
 ws.binaryType = 'arraybuffer';
-ws.onmessage = function(evt) {
+ws.onmessage = (evt)=>{
  if(evt.data.byteLength === 0) { last_ws_pong_time_ms = Date.now();
  }else{
-  var d = new DataView(event.data);
+  var d = new DataView(evt.data);
   let eid = d.getUint16(0, true);
-  if (eid in ws_actions) { ws_actions[eid](event.data.slice(2)); }
+  if (eid in ws_actions) { ws_actions[eid](evt.data.slice(2)); }
  }
 };
-function cstr2str(array) {
+const cstr2str = (array)=>{
  const d = new Uint8Array(array);
  const i = d.indexOf(0);
  return new TextDecoder('utf-8').decode(i >= 0 ? d.subarray(0, i) : d);
-}
-function str2cstr(str) {
+};
+const str2cstr = (str)=>{
  const e = new TextEncoder();
  const d = e.encode(str);
  const cstr = new Uint8Array(d.length + 1);
  cstr.set(d, 0);
  cstr[d.length] = 0; //NULL
  return cstr;
-}
-function ws_send_with_eid(eid, d) {
+};
+const floats2bytes = (floats)=>{
+ return new Uint8Array((new Float32Array(floats)).buffer);
+};
+const bytes2floats = (bytes)=>{
+ return new Float32Array(bytes);
+};
+const ws_send_with_eid = (eid, d)=>{
  const h = new Uint8Array(2);
  h[0] = eid & 0xff;
  h[1] = (eid >> 8) & 0xff;
@@ -190,8 +197,8 @@ function ws_send_with_eid(eid, d) {
  pd.set(h, 0);
  pd.set(d, h.length);
  ws.send(pd);
-}
-function ws_ping() { ws_send_with_eid(0, str2cstr(location.pathname)); }
+};
+const ws_ping = ()=>{ ws_send_with_eid(0, str2cstr(location.pathname)); }
 window.addEventListener('beforeunload',()=>{ if(ws.readyState===WebSocket.OPEN) ws.close(); });
 setInterval(ws_ping, 1000);
 setInterval(()=>{

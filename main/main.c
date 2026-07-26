@@ -4,9 +4,11 @@
 #include "esp_timer.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
+#include "esp_chip_info.h"
 #include "esp_netif.h"
 #include "esp_heap_caps.h"
 #include "esp_system.h"
+#include "esp_flash.h"
 #include "math.h"
 
 #include "wifiui_server.h"
@@ -132,24 +134,60 @@ void input_callback(char* str, void* param)
         if(msglog != NULL) msglog->print(msglog, buf);
     }
 
-    if(strcmp(str, "mem") == 0)
+    if(strcmp(str, "chip") == 0)
     {
-        // print free memory
-        ESP_LOGI(TAG, "");
-        ESP_LOGI(TAG, "=== memory info ===");
-        UBaseType_t high_water_mark = uxTaskGetStackHighWaterMark(NULL);
-        ESP_LOGI(TAG, "Stack high water mark  : %u words", (unsigned int)high_water_mark);
+        esp_chip_info_t chip_info;
+        uint32_t flash_size;
+        esp_chip_info(&chip_info);
+        printf("This is %s chip with %d CPU core(s), %s%s%s%s, ",
+            CONFIG_IDF_TARGET,
+            chip_info.cores,
+            (chip_info.features & CHIP_FEATURE_WIFI_BGN) ? "WiFi/" : "",
+            (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
+            (chip_info.features & CHIP_FEATURE_BLE) ? "BLE" : "",
+            (chip_info.features & CHIP_FEATURE_IEEE802154) ? ", 802.15.4 (Zigbee/Thread)" : "");
+
+        volatile unsigned major_rev = chip_info.revision / 100;
+        volatile unsigned minor_rev = chip_info.revision % 100;
+        printf("silicon revision v%d.%d, ", major_rev, minor_rev);
+
+        if(esp_flash_get_size(NULL, &flash_size) == ESP_OK)
+        {
+            printf("%" PRIu32 "MB %s flash\n", flash_size / (uint32_t)(1024 * 1024),
+                (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
+        }
+    }
+    else if(strcmp(str, "ram") == 0)
+    {
+        puts("\n=== RAM info ===");
+        UBaseType_t stack_high_water_mark = uxTaskGetStackHighWaterMark(NULL);
+        size_t stack_high_water_mark_bytes = (size_t)stack_high_water_mark * sizeof(StackType_t);
+        printf("Stack of task '%s'\n", pcTaskGetName(NULL));
+        printf("  high water mark  : %zu bytes\n", stack_high_water_mark_bytes);
+        size_t total_heap = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
         size_t free_heap = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+        size_t used_heap = total_heap - free_heap;
         size_t min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
-        ESP_LOGI(TAG, "Current free heap      : %u bytes", (unsigned int)free_heap);
-        ESP_LOGI(TAG, "Minimum free heap ever : %u bytes", (unsigned int)min_free_heap);
-        ESP_LOGI(TAG, "===================");
-        ESP_LOGI(TAG, "");
+        size_t max_used_heap = total_heap - min_free_heap;
+        float usage_rate = (total_heap > 0) ? ((float)used_heap * 100.0f / (float)total_heap) : 0.0f;
+        float max_usage_rate = (total_heap > 0) ? ((float)max_used_heap * 100.0f / (float)total_heap) : 0.0f;
+        puts("Heap");
+        printf("  Total            : %zu bytes\n", total_heap);
+        printf("  Current usage    : %zu bytes (%.2f %%)\n", used_heap, usage_rate);
+        printf("  Max usage ever   : %zu bytes (%.2f %%)\n", max_used_heap, max_usage_rate);
+        puts("===================\n");
     }
     else if(strcmp(str, "server") == 0)
     {
         // print server status
         wifiui_print_server_status();
+    }
+    else
+    {
+        puts("unknown command!");
+        puts("- chip: show chip information");
+        puts("- ram: show RAM usage");
+        puts("- server: show server status");
     }
 }
 

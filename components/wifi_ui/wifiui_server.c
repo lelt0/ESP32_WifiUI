@@ -693,14 +693,13 @@ esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst)
 
 void wifiui_print_server_status()
 {
-    if(server == NULL) {
-        ESP_LOGW(TAG, "HTTP server: not started");
-    } else {
-        esp_netif_ip_info_t ap_ip = {0};
-        get_current_ap_ip(&ap_ip);
-        printf("--------------------------------\n");
-        printf("HTTP server: " IPSTR "\n", IP2STR(&ap_ip.ip));
-    }
+    puts("\n=== server info ===");
+    
+    esp_netif_ip_info_t ap_ip = {0};
+    get_current_ap_ip(&ap_ip);
+    printf("HTTP server: %s\n", (server?"running":"not started"));
+    printf("  IP " IPSTR "\n", IP2STR(&ap_ip.ip));
+
     size_t fds = MAX_SOCKS;
     int clinet_fds[MAX_SOCKS] = {0};
     ESP_ERROR_CHECK(httpd_get_client_list(server, &fds, clinet_fds));
@@ -728,5 +727,5 @@ void wifiui_print_server_status()
         );
     }
 
-    printf("--------------------------------\n");
+    puts("===================\n");
 }

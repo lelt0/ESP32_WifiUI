@@ -145,7 +145,7 @@ img, video { display: block; margin: 0.5em auto; max-width: 100%%; max-height: 1
 .combo_list { top: 100%%; left: 0; right: 0; border: 1px solid #ccc; border-top: none; overflow-y: auto; display: none; z-index: 1000; }
 .combo_item { padding: 6px 8px; cursor: pointer; }
 .combo_item:hover { background: #def; }
-.serial_log {width: 100%%; height: 200px; border: 1px solid #ccc; resize: none; overflow-y: auto; word-break: break-all; overflow-wrap: break-word; }
+.serial_log {width: 100%%; height: 200px; border: 1px solid #ccc; resize: none; overflow-y: auto; word-break: break-all; overflow-wrap: break-word; background:#000; color:#fff; }
 </style>
 <script>
 function fit_textarea_height(id){ t = document.getElementById(id); t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }

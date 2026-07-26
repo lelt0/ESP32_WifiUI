@@ -47,7 +47,7 @@ void status_send_task(void *arg) {
         if(dtext_time != NULL)
         {
             char update_text[64];
-            snprintf(update_text, 32, "<b>Boot time:</b> %6.3lfs", time);
+            snprintf(update_text, 32, "Boot time: %6.3lfs", time);
             dtext_time->change_text(dtext_time, update_text);
         }
 
@@ -169,7 +169,7 @@ void app_main(void)
     wifiui_page_t* scatter3d_page = wifiui_create_page("scatter3d-plot sample");
 
     /* Static & Dynamic text sample */
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<b>This is WifiUI sample page.</b>\nHello, World!"));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<p>This is WifiUI sample page.\nHello, World!</p>"));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_time = wifiui_element_dynamic_text("Boot time: --")));
 
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Control", 2));

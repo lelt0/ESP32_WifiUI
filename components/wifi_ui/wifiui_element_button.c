@@ -23,7 +23,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self_)
 {
     dstring_t* html = dstring_create(128);
     wifiui_element_button_t* self = (wifiui_element_button_t*)self_;
-    dstring_appendf(html, "<p><button onclick='fetch(location.origin + location.pathname + \"?eid=%s\", {method:\"POST\"})' id=\"%s\">%s</button></p>", 
+    dstring_appendf(html, "<button onclick='fetch(location.origin + location.pathname + \"?eid=%s\", {method:\"POST\"})' id=\"%s\">%s</button>", 
         self->common.id_str, self->common.id_str, self->label);
     return html;
 }

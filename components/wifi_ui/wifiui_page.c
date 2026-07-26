@@ -123,9 +123,8 @@ const char * html_head_template = R"(
 <style>
 * { box-sizing: border-box; }
 body { background: #FFF; color: #222; font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; 
-width: min(100vh, 100vw); margin: 0 auto; padding: 1em 1em;
+width: 100vmin; margin: 0 auto; padding: 1em 1em;
 }
-h1, h2, h3, h4, h5, h6, p { margin: 0 0 0.8em 0; text-align: left; }
 
 button { display: block;
 margin: 0.5em auto; padding: 0.6em 1.2em; border: none; border-radius: 0.5em;
@@ -134,9 +133,9 @@ font-size: 1em; background: #2d6cdf; color: #fff; cursor: pointer;
 button { width: 100%%;} @media (min-width: 600px) { button { width: auto; min-width: 100px; } }
 button:hover { background: #005fcc; } 
 
-img, video { display: block; margin: 1em auto; max-width: 100%%; max-height: 100vh; }
+img, video { display: block; margin: 0.5em auto; max-width: 100%%; max-height: 100vh; }
 
-.plot_container canvas { display: block; margin: 1em auto; background: #fff; border: 1px solid #eee;}
+.plot_container canvas { display: block; margin: 0.5em auto; background: #fff; border: 1px solid #eee;}
 .inline { display: inline-block; margin: 0.5em; width: auto;}
 .width_fixed {white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .wrap_text { white-space: pre-wrap; }

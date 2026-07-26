@@ -26,10 +26,8 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
     wifiui_element_input_t* self_input = (wifiui_element_input_t*)self;
     dstring_t* html = dstring_create(1024);
     dstring_appendf(html, 
-        "<p>"
         "<textarea class='multi_input' id='%s' rows='1' placeholder='%s'></textarea>"
         "<button id='%s_btn' onclick='eid=\"%s\"; t = document.getElementById(eid); ws_send_with_eid(%u, str2cstr(t.value)); %s'>%s</button>"
-        "</p>"
         "<script>"
         "document.getElementById('%s').addEventListener('keydown', function(e){ if(e.key==='Enter'&& e.ctrlKey){e.preventDefault();document.getElementById('%s_btn').click();} });"
         "document.getElementById('%s').addEventListener('input', function(){ fit_textarea_height('%s'); });"

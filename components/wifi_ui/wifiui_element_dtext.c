@@ -24,7 +24,7 @@ dstring_t* create_partial_html(const wifiui_element_t* self_)
     wifiui_element_dtext_t* self = (wifiui_element_dtext_t*)self_;
     dstring_t* html = dstring_create(256);
     dstring_appendf(html, 
-        "<p class='wrap_text' id='%s'>%s</p>"
+        "<div class='wrap_text' id='%s'>%s</div>"
         "<script>"
             "ws_actions[%d]=function(array){"
                 "document.getElementById('%s').innerHTML = cstr2str(array);"

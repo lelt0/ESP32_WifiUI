@@ -19,6 +19,6 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
 {
     wifiui_element_stext_t* self_stext = (wifiui_element_stext_t*)self;
     dstring_t* html = dstring_create(128);
-    dstring_appendf(html, "<p class='wrap_text'>%s</p>", self_stext->text);
+    dstring_appendf(html, "<div class='wrap_text'>%s</div>", self_stext->text);
     return html;
 }

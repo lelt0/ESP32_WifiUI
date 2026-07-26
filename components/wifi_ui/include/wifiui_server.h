@@ -9,7 +9,7 @@ extern "C" {
 
 void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_page_t* top_page);
 void wifiui_get_ap_ssid(char* dst, size_t dst_size);
-void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_element_t* element_info);
+void wifiui_ws_send_element_data_async(wifiui_element_id element_id, const char* element_data, size_t element_data_len);
 
 void wifiui_start_ssid_scan();
 void wifiui_set_ssid_scan_callback(void (*callback)(void*), void* arg);

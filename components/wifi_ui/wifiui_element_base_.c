@@ -18,15 +18,9 @@ void set_default_common(wifiui_element_t* dst, wifiui_element_type type, create_
     dst->system.use_ploty = false;
 }
 
-void wifiui_element_send_data(const wifiui_element_t* dst, const char* data, size_t len)
+void wifiui_element_send_data(const wifiui_element_t* element, const char* data, size_t len)
 {
-    char * element_data = (char*)malloc(sizeof(wifiui_element_id) + len);
-    if(element_data == NULL) return;
-
-    *((wifiui_element_id*)element_data) = dst->id;
-    memcpy(element_data + sizeof(wifiui_element_id), data, len);
-    wifiui_ws_send_data_async(element_data, sizeof(wifiui_element_id) + len, dst);
-    free(element_data);
+    wifiui_ws_send_element_data_async(element->id, data, len);
 }
 
 wifiui_element_id new_id()

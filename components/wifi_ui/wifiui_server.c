@@ -31,16 +31,16 @@ typedef struct {
     const wifiui_page_t* active_page;
     int http_fd;
     int ws_fd;
-    uint64_t last_ping_time_us;
+    uint64_t last_access_time_us;
 } client_info_t;
 static client_info_t clients_info[MAX_CLIENTS];
-static void clear_client_info(client_info_t* cinfo){ cinfo->active = false; cinfo->ip.addr = 0; cinfo->active_page = NULL; cinfo->http_fd=-1; cinfo->ws_fd=-1; cinfo->last_ping_time_us = 0; }
+static void clear_client_info(client_info_t* cinfo){ cinfo->active = false; cinfo->ip.addr = 0; cinfo->active_page = NULL; cinfo->http_fd=-1; cinfo->ws_fd=-1; cinfo->last_access_time_us = 0; }
 static client_info_t* find_free_client(){ for(int i=0;i<MAX_CLIENTS;i++){ if(!clients_info[i].active) return (clients_info+i); } return NULL; }
 static client_info_t* find_client(esp_ip4_addr_t ip){ for(int i=0;i<MAX_CLIENTS;i++){ if(clients_info[i].active && clients_info[i].ip.addr == ip.addr) return &clients_info[i]; } return NULL; }
 static void close_client(client_info_t* client);
 static void close_session(int fd);
 static void close_unused_clients();
-static void print_client_info(client_info_t* cinfo){ if(!cinfo) return; printf("active:%c " IPSTR " page:%s(H%d/W%d) tim:%llums\n", (cinfo->active?'T':'F'), IP2STR(&cinfo->ip), (cinfo->active_page?cinfo->active_page->uri:"NULL"), cinfo->http_fd, cinfo->ws_fd, cinfo->last_ping_time_us/1000); }
+static void print_client_info(client_info_t* cinfo){ if(!cinfo) return; printf("active:%c " IPSTR " page:%s(H%d/W%d) tim:%llums\n", (cinfo->active?'T':'F'), IP2STR(&cinfo->ip), (cinfo->active_page?cinfo->active_page->uri:"NULL"), cinfo->http_fd, cinfo->ws_fd, cinfo->last_access_time_us/1000); }
 static void wifiui_ws_send_pong(int fd);
 static esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd);
 
@@ -81,6 +81,7 @@ void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_pag
         Turn of warnings from HTTP server as redirecting traffic will yield
         lots of invalid requests
     */
+    esp_log_level_set("dns_redirect_server", ESP_LOG_WARN);
     esp_log_level_set("httpd_uri", ESP_LOG_WARN);
     esp_log_level_set("httpd_txrx", ESP_LOG_WARN);
     esp_log_level_set("httpd_parse", ESP_LOG_WARN);
@@ -298,7 +299,6 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id
     {
         ip_event_assigned_ip_to_client_t *event = (ip_event_assigned_ip_to_client_t*) event_data;
         ESP_LOGI(TAG, "IP assigned. mac:" MACSTR " ip:" IPSTR, MAC2STR(event->mac), IP2STR(&event->ip));
-        close_unused_clients();
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED)
     {
@@ -329,7 +329,9 @@ esp_err_t page_access_handler(httpd_req_t *req)
                 client->active = true;
                 client->ip = ip;
                 client->http_fd = sock_fd;
+                client->last_access_time_us = esp_timer_get_time();
             }
+            close_unused_clients();
 
             switch (req->method)
             {
@@ -391,6 +393,7 @@ esp_err_t websocket_handler(httpd_req_t *req)
             client->ip = ip;
             client->ws_fd = sock_fd;
             client->active_page = page;
+            client->last_access_time_us = esp_timer_get_time();
         }
         else
         {
@@ -434,7 +437,7 @@ esp_err_t websocket_handler(httpd_req_t *req)
         {
             esp_ip4_addr_t ip = get_client_ip_addr(req, sock_fd);
             client_info_t* client = find_client(ip);
-            if(client) client->last_ping_time_us = esp_timer_get_time();
+            if(client) client->last_access_time_us = esp_timer_get_time();
             wifiui_ws_send_pong(sock_fd);
         }
         else
@@ -462,14 +465,14 @@ esp_err_t ploty_js_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_element_t* element_info)
+static void free_data(esp_err_t err, int socket, void *data)
+{
+    if (data) free(data);
+}
+void wifiui_ws_send_element_data_async(wifiui_element_id element_id, const char* element_data, size_t element_data_len)
 {
     if(server == NULL) return;
 
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = (uint8_t *)data;
-    ws_pkt.len = len;
     for(int cli_i = 0; cli_i < MAX_CLIENTS; cli_i++)
     {
         // そのelementがあるページがアクティブなクライアントにだけ送信する
@@ -479,7 +482,7 @@ void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_elemen
         if(client->active_page == NULL) continue;
         for(int element_i = 0; element_i < client->active_page->element_count; element_i++)
         {
-            if(client->active_page->elements[element_i]->id == element_info->id)
+            if(client->active_page->elements[element_i]->id == element_id)
             {
                 element_is_active = true;
                 break;
@@ -488,9 +491,24 @@ void wifiui_ws_send_data_async(const char* data, size_t len, const wifiui_elemen
 
         if(client->ws_fd >= 0 && element_is_active)
         {
-            ws_pkt.type = HTTPD_WS_TYPE_BINARY;
-            esp_err_t ret = httpd_ws_send_frame_async(server, client->ws_fd, &ws_pkt);
-            if (ret != ESP_OK) close_unused_clients();
+            char * data = (char*)malloc(sizeof(wifiui_element_id) + element_data_len);
+            if(data != NULL)
+            {
+                *((wifiui_element_id*)data) = element_id;
+                memcpy(data + sizeof(wifiui_element_id), element_data, element_data_len);
+
+                httpd_ws_frame_t ws_pkt;
+                memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+                ws_pkt.payload = (uint8_t *)data;
+                ws_pkt.len = sizeof(wifiui_element_id) + element_data_len;
+                ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+                esp_err_t ret = httpd_ws_send_data_async(server, client->ws_fd, &ws_pkt, free_data, data);
+                if (ret != ESP_OK)
+                {
+                    free(data);
+                    close_unused_clients();
+                }
+            }
         }
     }
 }
@@ -503,7 +521,7 @@ void wifiui_ws_send_pong(int fd)
     ws_pkt.payload = NULL;
     ws_pkt.len = 0;
 
-    esp_err_t ret = httpd_ws_send_frame_async(server, fd, &ws_pkt);
+    esp_err_t ret = httpd_ws_send_data_async(server, fd, &ws_pkt, NULL, NULL);
     if (ret != ESP_OK) close_unused_clients();
 }
 
@@ -589,10 +607,10 @@ void close_unused_clients()
     {
         client_info_t* client = &clients_info[cli_i];
         if(!client->active) continue;
-        if(now_us - client->last_ping_time_us > 5000000ULL) close_client(client);
+        if(now_us - client->last_access_time_us > 5000000ULL) close_client(client);
     }
 
-    // 管理していないのにhttpdに残っているws_fdをclose
+    // 管理していないのにhttpdに残っているfdをclose
     size_t fds = MAX_SOCKS;
     int alive_fds[MAX_SOCKS] = {0};
     ESP_ERROR_CHECK(httpd_get_client_list(server, &fds, alive_fds));
@@ -618,7 +636,7 @@ void close_unused_clients()
         }
     }
 
-    // 管理しているけどhttpdにないws_fdをclose
+    // 管理しているけどhttpdにないfdをもつclientをclose
     fds = MAX_SOCKS;
     ESP_ERROR_CHECK(httpd_get_client_list(server, &fds, alive_fds));
     for(int cli_i = 0; cli_i < MAX_CLIENTS; cli_i++)
@@ -703,11 +721,7 @@ void wifiui_print_server_status()
 {
     puts("\n=== server info ===");
     
-    esp_netif_ip_info_t ap_ip = {0};
-    get_current_ap_ip(&ap_ip);
     printf("HTTP server: %s\n", (server?"running":"not started"));
-    printf("  IP " IPSTR "\n", IP2STR(&ap_ip.ip));
-
     size_t fds = MAX_SOCKS;
     int clinet_fds[MAX_SOCKS] = {0};
     ESP_ERROR_CHECK(httpd_get_client_list(server, &fds, clinet_fds));
@@ -719,21 +733,28 @@ void wifiui_print_server_status()
         printf(" %d%c", clinet_fds[i], fd_protocol_char);
     }
     printf("\n");
-
-    esp_netif_ip_info_t sta_ip = {0};
-    get_current_sta_ip(&sta_ip);
-    printf("IP as STA: " IPSTR "\n", IP2STR(&sta_ip.ip));
-
-    puts("clients:");
+    puts("  clients:");
     for(int cli_i = 0; cli_i < MAX_CLIENTS; cli_i++)
     {
         if(!clients_info[cli_i].active) continue;
-        printf("  " IPSTR " %s(H%d/W%d) tim:%llums\n",
+        printf("    " IPSTR " %s(%dH/%dW) tim:%llums\n",
             IP2STR(&clients_info[cli_i].ip), ((clients_info[cli_i].active_page==NULL)? "--" : clients_info[cli_i].active_page->uri),
             clients_info[cli_i].http_fd, clients_info[cli_i].ws_fd,
-            clients_info[cli_i].last_ping_time_us / 1000
+            clients_info[cli_i].last_access_time_us / 1000
         );
     }
+    printf("  now: %llums\n", esp_timer_get_time()/1000);
+
+    puts("Access Point");
+    char ap_ssid[32] = {0};
+    wifiui_get_ap_ssid(ap_ssid, sizeof(ap_ssid));
+    printf("  SSID: %s\n", ap_ssid);
+    esp_netif_ip_info_t ap_ip = {0};
+    get_current_ap_ip(&ap_ip);
+    printf("  IP : " IPSTR "\n", IP2STR(&ap_ip.ip));
+    esp_netif_ip_info_t sta_ip = {0};
+    get_current_sta_ip(&sta_ip);
+    printf("IP as STA: " IPSTR "\n", IP2STR(&sta_ip.ip));
 
     puts("===================\n");
 }

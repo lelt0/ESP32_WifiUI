@@ -23,13 +23,18 @@
 #include "wifiui_element_scatterplot.h"
 #include "wifiui_element_slider.h"
 
+#include "led_ws2812.h"
+
 static const char *TAG = "sample";
 
 const wifiui_element_dtext_t* dtext_time = NULL;
 const wifiui_element_timeplot_t* timeplot = NULL;
 const wifiui_element_scatterplot_t* scatterplot = NULL;
 const wifiui_element_scatter3dplot_t* scatter3dplot = NULL;
-const wifiui_element_slider_t* slider = NULL;
+const wifiui_element_slider_t* slider_LED_switch = NULL;
+const wifiui_element_slider_t* slider_LED_red = NULL;
+const wifiui_element_slider_t* slider_LED_green = NULL;
+const wifiui_element_slider_t* slider_LED_blue = NULL;
 
 /* Interval task */
 void status_send_task(void *arg) {
@@ -42,7 +47,7 @@ void status_send_task(void *arg) {
         if(dtext_time != NULL)
         {
             char update_text[64];
-            snprintf(update_text, 32, "Boot time: %6.3lfs", time);
+            snprintf(update_text, 32, "<b>Boot time:</b> %6.3lfs", time);
             dtext_time->change_text(dtext_time, update_text);
         }
 
@@ -102,28 +107,17 @@ void status_send_task(void *arg) {
     }
 }
 
-/* Button click callback */
-#define LED_GPIO 19
-static bool led_status = true;
-const wifiui_element_dtext_t* dtext_led = NULL;
-void toggle_led(const wifiui_element_button_t * dummy, void* arg)
+/* LED slider input callback */
+static void led_color_changed_callback(float value)
 {
-    led_status = !led_status;
-    gpio_set_level(LED_GPIO, led_status);
-
-    if(dtext_led != NULL) {
-        if(led_status){
-            dtext_led->change_text(dtext_led, "LED status: <font color='#00C000'><b>ON</b></font>");
-        }else{
-            dtext_led->change_text(dtext_led, "LED status: <font color='#C00000'><b>OFF</b></font>");
-        }
+    if(slider_LED_switch && slider_LED_red && slider_LED_green && slider_LED_blue)
+    {
+        int sw = (int)slider_LED_switch->current_value;
+        uint32_t r = sw * ((uint32_t) slider_LED_red->current_value);
+        uint32_t g = sw * ((uint32_t) slider_LED_green->current_value);
+        uint32_t b = sw * ((uint32_t) slider_LED_blue->current_value);
+        set_LED(r, g, b);
     }
-}
-
-/* Switch input callback */
-static void switch_changed_callback(float value)
-{
-    ESP_LOGI(TAG, "switch changed: %d", (int)value);
 }
 
 /* Text input callback */
@@ -179,13 +173,12 @@ void app_main(void)
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<b>This is WifiUI sample page.</b>\nHello, World!"));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_time = wifiui_element_dynamic_text("Boot time: --")));
 
-    /* Button control sample */
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Control", 2));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
-    wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_led = wifiui_element_dynamic_text("LED status: --")));
-    /* Slider sample */
-    wifiui_add_element(top_page, (const wifiui_element_t*) (slider = wifiui_element_slider("Slider", 0, 255, 1, 123, "red", NULL)));
-    wifiui_add_element(top_page, (const wifiui_element_t*) (wifiui_element_switch("Switch", false, NULL, switch_changed_callback)));
+    /* Switch&Slider sample */
+    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_switch = wifiui_element_switch("LED", false, NULL, led_color_changed_callback)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_red = wifiui_element_slider("R", 0, 127, 1, 16, "red", led_color_changed_callback)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_green = wifiui_element_slider("G", 0, 127, 1, 16, "green", led_color_changed_callback)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_blue = wifiui_element_slider("B", 0, 127, 1, 0, "blue", led_color_changed_callback)));
 
     /* Serial log & Text input sample */
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Mirror Console", 2));
@@ -215,9 +208,8 @@ void app_main(void)
     wifiui_add_element(scatter3d_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
     wifiui_add_element(scatter3d_page, (const wifiui_element_t*) (scatter3dplot = wifiui_element_scatter3d_plot(0, 1, 0, 1, -0.5, 0.5)));
 
-    gpio_reset_pin(LED_GPIO);
-    gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_level(LED_GPIO, led_status);
+    init_LED();
+    led_color_changed_callback(0.0); // LEDに初期値を反映
 
     /* Start WifiUI */
     wifiui_start("", "", top_page);

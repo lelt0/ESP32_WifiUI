@@ -4,3 +4,5 @@ build
 ploty/node_modules/
 ploty/dist/
 ploty/package-lock.json
+*.old
+managed_components/espressif__led_strip/examples

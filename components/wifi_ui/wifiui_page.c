@@ -98,7 +98,7 @@ dstring_t* wifiui_generate_page_html(const wifiui_page_t* page)
 {
     dstring_t* html = dstring_create(1024);
     
-    dstring_appendf(html, html_head_template, page->title);
+    dstring_appendf(html, html_head_template, page->title, page->title);
     if(page->use_websocket) dstring_appendf(html, "%s", html_websocket_template);
     if(page->use_ploty) dstring_appendf(html, "<script src='/ploty.js'></script>");
     for(int i = 0; i < page->element_count; i++) {
@@ -153,10 +153,13 @@ function fit_textarea_height(id){ t = document.getElementById(id); t.style.heigh
 </script>
 </head>
 <body>
+<header style='position:sticky; top:0; background:#fff; font-size:1.2rem; font-weight:bold; display:flex; justify-content:space-between; align-items:center;'>
+ <span>%s</span>
+ <span id='websocket_status' style='width:0.8em; height:0.8em; background:#0f0; border-radius:50%%;'></span>
+</header>
 )";
 
 const char * html_websocket_template = R"(
-<div id='sv_stat'>server_status</div>
 <script>
 let ws = new WebSocket('ws://' + location.host + location.pathname + '/ws');
 let ws_actions = {};
@@ -202,9 +205,9 @@ const ws_ping = ()=>{ ws_send_with_eid(0, str2cstr(location.pathname)); }
 window.addEventListener('beforeunload',()=>{ if(ws.readyState===WebSocket.OPEN) ws.close(); });
 setInterval(ws_ping, 1000);
 setInterval(()=>{
-  const stat_ele = document.getElementById('sv_stat');
+  const stat_ele = document.getElementById('websocket_status');
   const hbeat_sec = (Date.now() - last_ws_pong_time_ms) / 1000;
-  stat_ele.innerText = 'server status: ' + hbeat_sec.toFixed(3);
+  //stat_ele.innerText = 'server status: ' + hbeat_sec.toFixed(3);
   stat_ele.style.background = (hbeat_sec > 5? '#f00': (hbeat_sec > 3? '#ff0': '#0f0'));
  },100);
 </script>

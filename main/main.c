@@ -169,16 +169,15 @@ void app_main(void)
     wifiui_page_t* scatter3d_page = wifiui_create_page("scatter3d-plot sample");
 
     /* Static & Dynamic text sample */
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("WifiUI Sample", 1));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_static_text("<b>This is WifiUI sample page.</b>\nHello, World!"));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_time = wifiui_element_dynamic_text("Boot time: --")));
 
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Control", 2));
     /* Switch&Slider sample */
     wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_switch = wifiui_element_switch("LED", false, NULL, led_color_changed_callback)));
-    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_red = wifiui_element_slider("R", 0, 127, 1, 16, "red", led_color_changed_callback)));
-    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_green = wifiui_element_slider("G", 0, 127, 1, 16, "green", led_color_changed_callback)));
-    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_blue = wifiui_element_slider("B", 0, 127, 1, 0, "blue", led_color_changed_callback)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_red = wifiui_element_slider("R", 0, 127, 1, 32, "#f00", led_color_changed_callback)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_green = wifiui_element_slider("G", 0, 127, 1, 16, "#0f0", led_color_changed_callback)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_blue = wifiui_element_slider("B", 0, 127, 1, 0, "#00f", led_color_changed_callback)));
 
     /* Serial log & Text input sample */
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Mirror Console", 2));

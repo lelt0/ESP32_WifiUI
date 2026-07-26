@@ -684,6 +684,14 @@ esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst)
     return esp_netif_get_ip_info(sta_netif, dst);
 }
 
+void wifiui_get_ap_ssid(char* dst, size_t dst_size)
+{
+    wifi_config_t wifi_config;
+    esp_wifi_get_config(WIFI_IF_AP, &wifi_config);
+    memset(dst, 0, dst_size);
+    strncpy(dst, (char *)wifi_config.ap.ssid, dst_size - 1);
+}
+
 esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst)
 {
     esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");

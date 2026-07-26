@@ -18,12 +18,13 @@ dstring_t* dstring_create(size_t unit_length)
 dstring_t* dstring_create_json_list(const char* const* strs, size_t strs_count, size_t unit_length)
 {
     dstring_t* dstr = dstring_create(unit_length * strs_count);
+    dstring_appendf(dstr, "[");
     for(int i = 0; i < strs_count; i++)
     {
-        if(i == 0) dstring_appendf(dstr, "['%s',", strs[i]);
-        else if(i == strs_count - 1) dstring_appendf(dstr, "'%s']", strs[i]);
+        if(i == strs_count - 1) dstring_appendf(dstr, "'%s'", strs[i]);
         else dstring_appendf(dstr, "'%s',", strs[i]);
     }
+    dstring_appendf(dstr, "]");
     return dstr;
 }
 

@@ -25,20 +25,13 @@
 
 static const char *TAG = "sample";
 
-/* Interval task */
-// change Dynamic Text sample
-// update Plots (Time Plot, Scatter Plot, and 3D Scatter Plot) sample
 const wifiui_element_dtext_t* dtext_time = NULL;
 const wifiui_element_timeplot_t* timeplot = NULL;
 const wifiui_element_scatterplot_t* scatterplot = NULL;
 const wifiui_element_scatter3dplot_t* scatter3dplot = NULL;
 const wifiui_element_slider_t* slider = NULL;
 
-static void slider_changed_callback(float value)
-{
-    ESP_LOGI(TAG, "slider changed: %.1f", value);
-}
-
+/* Interval task */
 void status_send_task(void *arg) {
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -127,6 +120,12 @@ void toggle_led(const wifiui_element_button_t * dummy, void* arg)
     }
 }
 
+/* Switch input callback */
+static void switch_changed_callback(float value)
+{
+    ESP_LOGI(TAG, "switch changed: %d", (int)value);
+}
+
 /* Text input callback */
 const wifiui_element_serialLog_t* msglog = NULL;
 void input_callback(char* str, void* param)
@@ -184,9 +183,9 @@ void app_main(void)
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Control", 2));
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_button("Toggle LED", toggle_led, NULL));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_led = wifiui_element_dynamic_text("LED status: --")));
-
     /* Slider sample */
-    wifiui_add_element(top_page, (const wifiui_element_t*) (slider = wifiui_element_slider("brightness", 0, 255, 1, 123, "red", slider_changed_callback)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (slider = wifiui_element_slider("Slider", 0, 255, 1, 123, "red", NULL)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (wifiui_element_switch("Switch", false, NULL, switch_changed_callback)));
 
     /* Serial log & Text input sample */
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Mirror Console", 2));

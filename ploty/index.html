@@ -42,7 +42,7 @@ img, video { display: block; margin: 1em auto; max-width: 100%; max-height: 100v
 <div id="debug_text">それも元来いくらでもどんな始末らによって方のうちから考えですな。近頃ほかから講演らは至極この支配べきんのみが来らと得るでをは永続いだろんと、少しにしかしですますななけれ。途よりいうう事は無論場合にもうましんなかっ。とうてい大森さんに自覚一つますます意味に悟っう自己その党派心それか＃「にに従ってご実在ただたないば、この時間は私か心性格を喜ぶば、嘉納さんの事を光明の何をはなはだご講演としけれども何生徒にご見当に行かようによくご料簡があるたたと、多分ちょうど教育に考えますているですのにできですない。つまりまたは実神経に見える気も多少簡単としですで、わが個人にはいうたいのでという人を飲んがいるでう。</div>
 <div style='display:flex'>
   <div id='sliderValue' class='fixed_width' style='width:30%'>文字列</div>
-  <input type='range' id='slider' min=0 max=10 step=0.5 value=1 style='accent-color:green; width:70%'>
+  <input type='range' id='slider' min=0 max=10 step=0.5 value=1 style='accent-color:default; width:70%'>
 </div>
 <script>
   const slider = document.getElementById('slider');
@@ -51,7 +51,6 @@ img, video { display: block; margin: 1em auto; max-width: 100%; max-height: 100v
     sliderValue.textContent = `現在の値: ${slider.value}`;
   });
   sliderValue.textContent = `現在の値: ${slider.value}`;
-  setInterval(()=>{console.log(slider.value);slider.value=Number(slider.value)+1;sliderValue.textContent = `現在の値: ${slider.value}`;}, 1000);
 </script>
 
 <button id="addPoint">点を追加</button>

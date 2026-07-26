@@ -18,7 +18,7 @@ const wifiui_element_slider_t * wifiui_element_slider(
     float step,
     float init_value,
     const char* color,
-    void (*on_changed_callback)(float) // NULL:操作不可
+    void (*on_changed_callback)(float)
 )
 {
     wifiui_element_slider_t* self = (wifiui_element_slider_t*)malloc(sizeof(wifiui_element_slider_t));
@@ -32,7 +32,32 @@ const wifiui_element_slider_t * wifiui_element_slider(
     self->max = max;
     self->step = step;
     self->current_value = init_value;
-    self->css_color = strdup(color);
+    self->css_color = (color!=NULL?strdup(color):"default");
+    self->on_changed = on_changed_callback;
+    self->set_value = set_value_impl;
+
+    return self;
+}
+
+const wifiui_element_slider_t * wifiui_element_switch(
+    const char* label,
+    bool init_value,
+    const char* color,
+    void (*on_changed_callback)(float)
+)
+{
+    wifiui_element_slider_t* self = (wifiui_element_slider_t*)malloc(sizeof(wifiui_element_slider_t));
+    if(self == NULL) return NULL;
+
+    set_default_common(&self->common, WIFIUI_SLIDER, create_partial_html);
+    self->common.system.on_recv_data = on_recv_data;
+
+    self->label = strdup(label);
+    self->min = 0;
+    self->max = 1;
+    self->step = 1;
+    self->current_value = (init_value?1:0);
+    self->css_color = (color!=NULL?strdup(color):"default");
     self->on_changed = on_changed_callback;
     self->set_value = set_value_impl;
 
@@ -44,15 +69,16 @@ static dstring_t* create_partial_html(const wifiui_element_t* self_)
     wifiui_element_slider_t* self = (wifiui_element_slider_t*)self_;
 
     dstring_t* html = dstring_create(512);
+    bool is_switch = (self->min == 0.f && self->max == 1.0f && self->step == 1.0f);
     dstring_appendf(html,
         "<div style='display:flex'>"
-            "<div id='%s_label' class='fixed_width' style='width:30%%'>%s</div>"
-            "<input type='range' id='%s_slider' min='%f' max='%f' step='%f' value='%f' style='accent-color:%s; width:70%%; %s'>"
+            "<div id='%s_label' class='fixed_width' style='%s'>%s</div>"
+            "<input type='range' id='%s_slider' min='%f' max='%f' step='%f' value='%f' style='accent-color:%s; %s; %s'>"
         "</div>"
         "<script>"
             "const _%s_label = document.getElementById('%s_label');"
             "const _%s_slider = document.getElementById('%s_slider');"
-            "const update_%s_label = ()=>{ _%s_label.textContent = `%s ${_%s_slider.value}`; };"
+            "const update_%s_label = ()=>{ if(%s){_%s_label.textContent = `%s ${_%s_slider.value}`;} };"
             "update_%s_label();"
             "_%s_slider.addEventListener('input', ()=>{"
                 "update_%s_label();"
@@ -64,12 +90,12 @@ static dstring_t* create_partial_html(const wifiui_element_t* self_)
                 "update_%s_label();"
             "}"
         "</script>",
-        self->common.id_str, self->label, 
-        self->common.id_str, self->min, self->max, self->step, self->current_value, self->css_color, (self->on_changed==NULL?"pointer-events:none":""),
+        self->common.id_str, (is_switch?"flex:1":"width:30%"), self->label, 
+        self->common.id_str, self->min, self->max, self->step, self->current_value, self->css_color, (is_switch?"width:2rem":"width:70%"), (self->on_changed==NULL?"pointer-events:none":""),
 
         self->common.id_str, self->common.id_str,
         self->common.id_str, self->common.id_str,
-        self->common.id_str, self->common.id_str, self->label, self->common.id_str,
+        self->common.id_str, (is_switch?"false":"true"), self->common.id_str, self->label, self->common.id_str,
         self->common.id_str,
         self->common.id_str,
             self->common.id_str,

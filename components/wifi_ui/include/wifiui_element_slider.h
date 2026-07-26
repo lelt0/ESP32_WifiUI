@@ -26,7 +26,13 @@ const wifiui_element_slider_t * wifiui_element_slider(
     float max,
     float step,
     float init_value,
-    const char* color,
+    const char* color, // NULL:デフォルト色
+    void (*on_changed_callback)(float) // NULL:UI操作不可
+);
+const wifiui_element_slider_t * wifiui_element_switch(
+    const char* label,
+    bool init_value,
+    const char* color, // NULL:デフォルト色
     void (*on_changed_callback)(float) // NULL:UI操作不可
 );
 

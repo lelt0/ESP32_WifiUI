@@ -87,7 +87,6 @@ dstring_t* create_partial_html(const wifiui_element_t* self)
             "});"
             "ws_actions[%d]=function(array){"
                 "const str = cstr2str(array);"
-                "console.log('[yatadebug] ' + str);"
                 "if(str.startsWith('#')) {"
                     "connect_button.textContent = str.substring(1);"
                     "setTimeout(() => connect_button.textContent = connect_button_dafault_text, 1000);"

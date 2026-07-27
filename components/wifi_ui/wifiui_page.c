@@ -54,6 +54,26 @@ size_t wifiui_add_elements(wifiui_page_t* page, const wifiui_element_t* elements
     return page->element_count;
 }
 
+typedef struct {
+    wifiui_element_t common;
+    const char* html;
+} wifiui_element_html_t;
+static dstring_t* return_html(const wifiui_element_t* self)
+{
+    wifiui_element_html_t* self_html = (wifiui_element_html_t*)self;
+    dstring_t* html = dstring_create(64);
+    dstring_appendf(html, "<div class='wrap_text'>%s</div>", self_html->html);
+    return html;
+}
+size_t wifiui_add_html(wifiui_page_t* page, const char * html)
+{
+    wifiui_element_html_t* html_element = (wifiui_element_html_t*)malloc(sizeof(wifiui_element_html_t));
+    set_default_common(&html_element->common, WIFIUI_STATIC_TEXT, return_html);
+    html_element->html = strdup(html);
+
+    return wifiui_add_element(page, (const wifiui_element_t*) html_element);
+}
+
 wifiui_page_t ** wifiui_get_pages(uint16_t* pages_count_dst)
 {
     *pages_count_dst = pages_count;

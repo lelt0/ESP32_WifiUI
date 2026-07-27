@@ -21,6 +21,7 @@ typedef struct {
 wifiui_page_t * wifiui_create_page(const char * title);
 size_t wifiui_add_element(wifiui_page_t* page, const wifiui_element_t* element);
 size_t wifiui_add_elements(wifiui_page_t* page, const wifiui_element_t* elements[], size_t element_count);
+size_t wifiui_add_html(wifiui_page_t* page, const char * html); // add simple html to page
 wifiui_page_t ** wifiui_get_pages(uint16_t* pages_count);
 wifiui_element_t * wifiui_find_element(const wifiui_page_t * page, const wifiui_element_id id);
 

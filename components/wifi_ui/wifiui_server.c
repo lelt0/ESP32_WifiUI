@@ -20,9 +20,15 @@
 #define MAX_CLIENTS 2 // AP clients + LAN access
 #define MAX_SOCKS 7
 
+#ifndef WIFIUI_USE_PLOTY
+#define WIFIUI_USE_PLOTY 0
+#endif
+
 static const char * TAG = "wifiui_server";
+#if WIFIUI_USE_PLOTY
 extern const uint8_t ploty_min_js_gz_start[] asm("_binary_ploty_min_js_gz_start");
 extern const uint8_t ploty_min_js_gz_end[]   asm("_binary_ploty_min_js_gz_end");
+#endif
 
 // 接続中のclient管理
 typedef struct {
@@ -59,7 +65,9 @@ static httpd_handle_t start_webserver(void);
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 static esp_err_t page_access_handler(httpd_req_t *req);
 static esp_err_t websocket_handler(httpd_req_t *req);
+#if WIFIUI_USE_PLOTY
 static esp_err_t ploty_js_get_handler(httpd_req_t *req);
+#endif
 static esp_err_t redirect_handler(httpd_req_t *req);
 static esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err); // HTTP Error (404) Handler - Redirects all requests to the root page
 
@@ -227,12 +235,14 @@ httpd_handle_t start_webserver(void)
                 }
             }
         }
+#if WIFIUI_USE_PLOTY
         static const httpd_uri_t ploty_js_uri = {
             .uri = "/ploty.js",
             .method = HTTP_GET,
             .handler = ploty_js_get_handler
         };
         httpd_register_uri_handler(server, &ploty_js_uri);
+#endif
         const httpd_uri_t redirect_uri = {
             .uri = "*",
             .method = HTTP_GET,
@@ -453,6 +463,7 @@ esp_err_t websocket_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+#if WIFIUI_USE_PLOTY
 esp_err_t ploty_js_get_handler(httpd_req_t *req)
 {
     ESP_LOGD(TAG, "ACCESS(ploty.js): %s %s (fd%d)", req->uri, http_method_str(req->method), httpd_req_to_sockfd(req));
@@ -464,6 +475,7 @@ esp_err_t ploty_js_get_handler(httpd_req_t *req)
     httpd_resp_send(req, (const char *)ploty_min_js_gz_start, len);
     return ESP_OK;
 }
+#endif
 
 static void free_data(esp_err_t err, int socket, void *data)
 {

@@ -249,7 +249,7 @@ void app_main(void)
     led_color_changed_callback(0.0); // LEDに初期値を反映
 
     /* Start WifiUI */
-    wifiui_start("", "", top_page);
+    wifiui_start("esp32-sample-", NULL, top_page);
 
     // create interval task
     xTaskCreate(status_send_task, "status_send_task", 4096, NULL, 5, NULL);

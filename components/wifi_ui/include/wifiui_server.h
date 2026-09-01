@@ -7,7 +7,7 @@ extern "C" {
 #include "../wifiui_page.h"
 #include "esp_wifi.h"
 
-void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_page_t* top_page);
+void wifiui_start(const char* ap_ssid, const char* ap_password, const wifiui_page_t* top_page); // ap_ssid: NULL or "" -> auto generate ssid, "<prefix>-"(end with '-') -> use prefix, otherwise use the given ssid. ap_password: NULL or "" -> no password, otherwise use the given password
 void wifiui_get_ap_ssid(char* dst, size_t dst_size);
 void wifiui_ws_send_element_data_async(wifiui_element_id element_id, const char* element_data, size_t element_data_len);
 

@@ -71,7 +71,7 @@ static esp_err_t ploty_js_get_handler(httpd_req_t *req);
 static esp_err_t redirect_handler(httpd_req_t *req);
 static esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err); // HTTP Error (404) Handler - Redirects all requests to the root page
 
-static void create_ssid(char * dst, unsigned int dst_len);
+static void create_ssid(char * dst, unsigned int dst_len, const char * prefix);
 static esp_err_t get_current_sta_ip(esp_netif_ip_info_t* dst);
 static esp_err_t get_current_ap_ip(esp_netif_ip_info_t* dst);
 
@@ -165,14 +165,17 @@ void wifi_init_softap(const char* ap_ssid, const char* ap_password)
             .max_connection = MAX_AP_CONN
         },
     };
-    if(strlen(ap_ssid)==0) {
-        create_ssid((char*)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid));
+    if(ap_ssid == NULL || strlen(ap_ssid)==0) {
+        create_ssid((char*)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid), NULL);
+        wifi_config.ap.ssid_len = strlen((char*)wifi_config.ap.ssid);
+    }else if(ap_ssid[strlen(ap_ssid)-1] == '-') {
+        create_ssid((char*)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid), ap_ssid);
         wifi_config.ap.ssid_len = strlen((char*)wifi_config.ap.ssid);
     }else{
         strncpy((char*)wifi_config.ap.ssid, ap_ssid, sizeof(wifi_config.ap.ssid));
         wifi_config.ap.ssid_len = strlen((char*)wifi_config.ap.ssid);
     }
-    if (strlen(ap_password) == 0) {
+    if (ap_password == NULL || strlen(ap_password) == 0) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }else{
         if(strlen(ap_password) > sizeof(wifi_config.ap.password) - 1) ESP_LOGW(TAG, "AP Password is too long!");
@@ -563,11 +566,11 @@ esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
     return ESP_OK;
 }
 
-void create_ssid(char * dst, unsigned int dst_len)
+void create_ssid(char * dst, unsigned int dst_len, const char * prefix)
 {
     uint8_t mac[6] = {0};
     esp_wifi_get_mac(WIFI_IF_AP, mac);
-    snprintf(dst, dst_len, "esp32-%02X%02X%02X", mac[3], mac[4], mac[5]);
+    snprintf(dst, dst_len, "%s%02X%02X%02X", prefix ? prefix : "esp32-", mac[3], mac[4], mac[5]);
 }
 
 esp_ip4_addr_t get_client_ip_addr(httpd_req_t *req, int sockfd)

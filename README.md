@@ -1,18 +1,16 @@
 # WifiUIとは？
 
 **Wifi経由で開けるESP32のGUI作成ライブラリ**  
-ESP32のアクセスポイントにスマホやPCを接続することでブラウザ経由開けるUIを提供  
-つまりワイヤレスでESP32の操作やデバッグなどが可能になる
+ESP32のワイヤレスUIが作成できます
 
-サポート機能
 - 動的テキスト
 - ボタン
 - スライダー
 - 2D、3Dグラフ
 - 外部Wifi接続フォーム
-- 標準入出力コンソール
+- Serialコンソール
 
-など
+などをサポートしています。
 
 <img src="doc/res/Screenshot_20250828_005012_Captive Portal Login.jpg" width="200">
 
@@ -26,16 +24,16 @@ ESP32のアクセスポイントにスマホやPCを接続することでブラ�
 
 ## サンプル実行手順
 
+サンプル `main/main.c` では、ESP32-S3開発ボードのRGB LEDを操作するUIを作成しています。
+
 1. 本プロジェクトをビルドしESP32にFlash
     1. `idf.py menuconfig` でWebSocketを有効化する > 詳細：[ESP-IDFでWebSocket有効化](#ESP32での実装方法)
     1. build & Flash（`idf.py build flash`）
 1. ESP32を起動
 1. PCやスマホで **SSID: esp32-XXXXXX**（XXXXXXはESP32のMACアドレス下6桁）に接続  
-    <img src="doc/res/image-8.png" width="100">
 1. **「ネットワークにサインイン」** を選択  
     （iOSやWindowsはこの操作は不要かもしれない）  
-    <img src="doc/res/image-9.png" width="100">
-    <img src="doc/res/image-10.png" width="100">
+    <img src="doc/res/image-8.png" width="100">
 1. UIページが立ち上がる  
     <img src="doc/res/Screenshot_20250828_005012_Captive Portal Login.jpg" width="100">
 
@@ -43,18 +41,98 @@ ESP32のアクセスポイントにスマホやPCを接続することでブラ�
 # デベロッパーマニュアル
 ## 開発環境
 - VS Code
-    - ESP-IDF V5.4.1 Extension (詳細はRADECHのドキュメント、もしくは[ESP32S3_helloworld](https://github.com/lelt0/ESP32S3_helloworld)を参照)    
-    - 使用モジュール：
-        - [HTTP Server](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/protocols/esp_http_server.html)
-        - [Wi-Fi](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/network/esp_wifi.html)  
-    - （できるだけライブラリサイズを小さくしたかったので、ArduinoライブラリではなくEPS-IDFベースで作成した）
+    - ESP-IDF V6.0.0 Extension (詳細はRADECHのドキュメント、もしくは[ESP32S3_helloworld](https://github.com/lelt0/ESP32S3_helloworld)を参照)
 - ESP32
-    無印もしくはS3で動作確認
+    - 無印もしくはS3で動作確認
 
-## UIの作成方法
+## UI作成の流れ
+  
+以下では例として「スライダー要素」を持つUIページを作成します。
 
-T.B.D
+1. **IDF環境へ本コンポーネントを追加**
+    1. `idf.py add-dependency --git https://github.com/lelt0/ESP32_WifiUI.git --git-path components/wifi_ui wifi_ui`
+    1. `idf.py reconfigure`
 
+1. **ソースコード例**
+    
+    ```c
+    #include <stdio.h>
+    #include <wifiui_server.h> // WifiUI必須ヘッダー
+    #include <wifiui_element_slider.h> // +必要な要素のヘッダーをinclude
+
+    static void slider_changed_callback(float); // スライダーの値変更時のコールバック関数
+
+    void app_main(void)
+    {
+        /* 1.ページを作成 */
+        wifiui_page_t* top_page = wifiui_create_page("WifiUI Sample");
+        wifiui_add_html(top_page, "<p>This is a sample page using WifiUI.</p>"); // Add static HTML to the page
+
+        /* 2.スライダー要素の作成とページへの追加 */
+        const wifiui_element_slider_t* slider_instance = wifiui_element_slider("slider", 0, 100, 1, 50, "#f00", slider_changed_callback); // Create a slider element
+        wifiui_add_element(top_page, (const wifiui_element_t*) slider_instance); // Add to the page
+
+        /* 3.UIサーバーの開始 */
+        wifiui_start(NULL, NULL, top_page);
+    }
+
+    static void slider_changed_callback(float value)
+    {
+        printf("slider value changed: %.0f\n", value);
+    }
+    ```
+
+1. **ビルドとFlash**  
+    ビルド・Flashは本READMEの「[サンプル実行手順](#サンプル実行手順)」を参照してください
+
+1. 上記の例では以下のUIが生成されます  
+    <img src="doc/res/image-9.png" width="250">
+
+## UI要素
+
+以下の要素を使用できます。詳細はヘッダファイルを参照してください。
+
+- 見出し
+    - <img src="doc/res/image-17.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_heading.h>`
+- 静的テキスト（HTML）
+    - <img src="doc/res/image-11.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_stext.h>`
+- 動的テキスト
+    - <img src="doc/res/image-13.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_dtext.h>`
+- ボタン
+    - <img src="doc/res/image-14.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_button.h>`  
+- スイッチ
+    - <img src="doc/res/image-12.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_slider.h>`
+- スライダー
+    - <img src="doc/res/image-23.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_slider.h>`
+- テキスト入力
+    - <img src="doc/res/image-18.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_input.h>`
+- シリアルコンソール
+    - 標準出力と標準エラー出力を表示します
+    - <img src="doc/res/image-16.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_serial_log.h>`
+- 無線LAN接続
+    - SSIDとパスワードで外部アクセスポイントに接続します
+    - <img src="doc/res/image-19.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_ap_connect_form.h>`
+- 他ページへのリンク
+    - <img src="doc/res/image-15.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_link.h>`
+- 時系列グラフ
+    - <img src="doc/res/image-20.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_timeplot.h>`
+- 散布図
+    - <img src="doc/res/image-21.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_scatterplot.h>`
+- 3D散布図
+    - <img src="doc/res/image-22.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - `#include <wifiui_element_scatter3d_plot.h>`
 
 ---
 # トラブルシューティング
@@ -76,7 +154,40 @@ T.B.D
 # 内部仕様（開発メモ）
 
 ## 全体シーケンス
-T.B.D
+```mermaid
+sequenceDiagram
+participant User as User Device
+participant DNS as DNS Server
+participant WWW as Web Server
+
+%% キャプティブポータルの流れ
+User->>DNS: DNS query for any domain
+DNS-->>User: Resolve to AP IP (captiveportal URI)
+User->>WWW: HTTP GET /any-uri
+WWW-->>User: 302 Redirect to captive portal (captiveportal_uri)
+User->>WWW: GET /top_page (index.html)
+WWW-->>User: Respond HTML + WS initialization script
+
+%% WebSocket 接続とハートビート
+User->>WWW: WebSocket Upgrade (ws://...)
+WWW-->>WWW: Update active_page
+WWW-->>User: 101 Switching Protocols (WS open)
+Note over User,WWW: WebSocket channel established
+par Heartbeat
+    User->>WWW: WS: ping every seconds#59; element_id == 0
+    WWW-->>User: WS: pong (wifiui_ws_send_pong)
+end
+
+%% アクティブページ追跡と要素操作
+Note over WWW: Track active clients and pages (client_info_t)
+User->>WWW: WS: element action#59; element_id == X (e.g. slider change)
+WWW-->>WWW: element callback
+WWW->>User: WS: element update#59; element_id == X (wifiui_ws_send_element_data_async)
+User-->>User: element action
+
+%% 切断検知・クリーンアップ
+Note over WWW: Monitor last_access_time, close unused clients when needed
+```
 
 ## キャプティブポータル
 特に公衆Wi-Fiなどのネットワークに接続したときに、インターネットアクセスの前にユーザーにログインや同意を求めるWebページを表示する仕組み。  

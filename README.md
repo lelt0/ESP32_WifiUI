@@ -93,45 +93,45 @@ ESP32のワイヤレスUIが作成できます
 以下の要素を使用できます。詳細はヘッダファイルを参照してください。
 
 - 見出し
-    - <img src="doc/res/image-17.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-17.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_heading.h>`
 - 静的テキスト（HTML）
-    - <img src="doc/res/image-11.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-11.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_stext.h>`
 - 動的テキスト
-    - <img src="doc/res/image-13.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-13.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_dtext.h>`
 - ボタン
-    - <img src="doc/res/image-14.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-14.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_button.h>`  
 - スイッチ
-    - <img src="doc/res/image-12.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-12.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_slider.h>`
 - スライダー
-    - <img src="doc/res/image-23.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-23.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_slider.h>`
 - テキスト入力
-    - <img src="doc/res/image-18.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-18.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_input.h>`
 - シリアルコンソール
     - 標準出力と標準エラー出力を表示します
-    - <img src="doc/res/image-16.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-16.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_serial_log.h>`
 - 無線LAN接続
     - SSIDとパスワードで外部アクセスポイントに接続します
-    - <img src="doc/res/image-19.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-19.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_ap_connect_form.h>`
 - 他ページへのリンク
-    - <img src="doc/res/image-15.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-15.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_link.h>`
 - 時系列グラフ
-    - <img src="doc/res/image-20.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-20.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_timeplot.h>`
 - 散布図
-    - <img src="doc/res/image-21.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-21.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_scatterplot.h>`
 - 3D散布図
-    - <img src="doc/res/image-22.png" style="max-width: 200px; border: 1px solid #DDD;">
+    - <img src="doc/res/image-22.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
     - `#include <wifiui_element_scatter3d_plot.h>`
 
 ---

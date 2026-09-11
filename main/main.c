@@ -26,17 +26,115 @@
 #include "wifiui_element_slider.h"
 
 #include "led_ws2812.h"
+#include "rot_encoder.h"
+#include "lcd_char2x8.h"
+#include "switch.h"
 
 static const char *TAG = "sample";
 
 const wifiui_element_dtext_t* dtext_time = NULL;
-const wifiui_element_timeplot_t* timeplot = NULL;
-const wifiui_element_scatterplot_t* scatterplot = NULL;
-const wifiui_element_scatter3dplot_t* scatter3dplot = NULL;
+const wifiui_element_timeplot_t* timeplot_ROT_ENCODER = NULL;
 const wifiui_element_slider_t* slider_LED_switch = NULL;
 const wifiui_element_slider_t* slider_LED_red = NULL;
 const wifiui_element_slider_t* slider_LED_green = NULL;
 const wifiui_element_slider_t* slider_LED_blue = NULL;
+
+typedef enum menu_status
+{
+    MENU_HOME,
+    MENU_SSID,
+    MENU_STAIP,
+    MENU_ONOFF,
+    MENU_R,
+    MENU_G,
+    MENU_B,
+    MENU__END
+} menu_status_t;
+static menu_status_t screen_state = MENU_HOME;
+static menu_status_t home_selection_state = MENU_SSID;
+static menu_status_t home_head_pos = MENU_SSID;
+static uint32_t s_ip_addr = 0;
+
+const char* get_menu_name(const menu_status_t m)
+{
+    switch (m)
+    {
+        case MENU_SSID: return "SSID";
+        case MENU_STAIP: return "STA IP";
+        case MENU_ONOFF: return "ON/OFF";
+        case MENU_R: return "Red";
+        case MENU_G: return "Green";
+        case MENU_B: return "Blue";
+        default: break;
+    }
+    return "";
+}
+void update_lcd()
+{
+    switch (screen_state)
+    {
+    case MENU_HOME:
+        {
+            char line[9];
+            menu_status_t line_menu = home_head_pos;
+            snprintf(line, sizeof(line), "%c %s", (home_selection_state==line_menu?'>':' '), get_menu_name(line_menu));
+            lcd_char2x8_write(0, line);
+
+            line_menu = home_head_pos + 1;
+            snprintf(line, sizeof(line), "%c %s", (home_selection_state==line_menu?'>':' '), get_menu_name(line_menu));
+            lcd_char2x8_write(1, line);
+        }
+        break;
+    case MENU_SSID:
+        {
+            char ap_ssid[16];
+            wifiui_get_ap_ssid(ap_ssid, sizeof(ap_ssid));
+            lcd_char2x8_write(-1, ap_ssid);
+        }
+        break;
+    case MENU_STAIP:
+        {
+            if(s_ip_addr == 0) {
+                lcd_char2x8_write(-1, "No IP");
+            } else {
+                char ip_str[16];
+                snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR((esp_ip4_addr_t*)&s_ip_addr));
+                lcd_char2x8_write(-1, ip_str);
+            }
+        }
+        break;
+    case MENU_ONOFF:
+        {
+            char line[9];
+            snprintf(line, sizeof(line), "LED %s", (slider_LED_switch->current_value < 0.5f ? "OFF" : "ON"));
+            lcd_char2x8_write(-1, line);
+        }
+        break;
+    case MENU_R:
+        {
+            char line[9];
+            snprintf(line, sizeof(line), "R:%3d", (int)slider_LED_red->current_value);
+            lcd_char2x8_write(-1, line);
+        }
+        break;
+    case MENU_G:
+        {
+            char line[9];
+            snprintf(line, sizeof(line), "G:%3d", (int)slider_LED_green->current_value);
+            lcd_char2x8_write(-1, line);
+        }
+        break;
+    case MENU_B:
+        {
+            char line[9];
+            snprintf(line, sizeof(line), "B:%3d", (int)slider_LED_blue->current_value);
+            lcd_char2x8_write(-1, line);
+        }
+        break;
+    default:
+        break;
+    }
+}
 
 /* Interval task */
 void status_send_task(void *arg) {
@@ -52,60 +150,6 @@ void status_send_task(void *arg) {
             snprintf(update_text, 32, "Boot time: %6.3lfs", time);
             dtext_time->change_text(dtext_time, update_text);
         }
-
-        if(timeplot != NULL)
-        {
-            float val1 = sinf(time) + 0.2 * ((float)rand()/RAND_MAX);
-            float val2 = cosf(time*0.5) + 0.2 * ((float)rand()/RAND_MAX);
-            uint64_t time_ms = (uint64_t)time*1000;
-            timeplot->update_plots(timeplot, time_ms, (float[]){val1, val2, NAN});
-            if(((int)time)%2==0) timeplot->update_plot(timeplot, "signalC", time_ms, (float)rand()/RAND_MAX);
-        }
-
-        if(scatterplot != NULL)
-        {
-            size_t point_count = ((size_t)time) % 100;
-            if(point_count > 0)
-            {
-                float* x = (float*)malloc(point_count * sizeof(float));
-                float* y = (float*)malloc(point_count * sizeof(float));
-                for(int i = 0; i < point_count; i++)
-                {
-                    x[i] = 0.1 * i * sin(i);
-                    y[i] = 0.1 * i * cos(i);
-                }
-                scatterplot->add_plot(scatterplot, "sample-1", point_count, x, y, true);
-                free(x);
-                free(y);
-            }
-        }
-
-        if(scatter3dplot != NULL)
-        {
-            const int D = 32;
-            size_t point_count = D * D;
-            float *x = (float*)malloc(point_count * sizeof(float));
-            float *y = (float*)malloc(point_count * sizeof(float));
-            float *z = (float*)malloc(point_count * sizeof(float));
-            uint32_t *color = (uint32_t*)malloc(point_count * sizeof(uint32_t));
-            for(int32_t yi = 0; yi < D; yi++)
-                for(int32_t xi = 0; xi < D; xi++)
-                {
-                    int32_t i = yi * D + xi;
-                    x[i] = (float) xi / D;
-                    y[i] = (float) yi / D;
-                    z[i] = 0.25 * sinf(6 * x[i] + time/8.f) * sinf(6 * y[i] + time/8.f);
-                    uint8_t r = (xi << 3);
-                    uint8_t b = (yi << 3);
-                    uint8_t g = (((D - xi - 1) + (D - yi - 1)) << 2);
-                    color[i] = RGB(r, g, b);
-                }
-            scatter3dplot->update_plot(scatter3dplot, point_count, x, y, z, color);
-            free(x);
-            free(y);
-            free(z);
-            free(color);
-        }
     }
 }
 
@@ -114,11 +158,19 @@ static void led_color_changed_callback(float value)
 {
     if(slider_LED_switch && slider_LED_red && slider_LED_green && slider_LED_blue)
     {
-        int sw = (int)slider_LED_switch->current_value;
-        uint32_t r = sw * ((uint32_t) slider_LED_red->current_value);
-        uint32_t g = sw * ((uint32_t) slider_LED_green->current_value);
-        uint32_t b = sw * ((uint32_t) slider_LED_blue->current_value);
+        uint32_t r = (uint32_t) (slider_LED_switch->current_value * slider_LED_red->current_value);
+        uint32_t g = (uint32_t) (slider_LED_switch->current_value * slider_LED_green->current_value);
+        uint32_t b = (uint32_t) (slider_LED_switch->current_value * slider_LED_blue->current_value);
         set_LED(r, g, b);
+
+        if(timeplot_ROT_ENCODER)
+        {
+            timeplot_ROT_ENCODER->update_plots(timeplot_ROT_ENCODER, esp_timer_get_time()/1000, (float[]){r, b, g});
+        }
+    }
+    if(screen_state == MENU_ONOFF || screen_state == MENU_R || screen_state == MENU_G || screen_state == MENU_B)
+    {
+        update_lcd();
     }
 }
 
@@ -127,12 +179,6 @@ const wifiui_element_serialLog_t* msglog = NULL;
 void input_callback(char* str, void* param)
 {
     ESP_LOGI(TAG, "INPUT: %s", str);
-    {
-        size_t buf_len = 16 + strlen(str);
-        char buf[buf_len];
-        snprintf(buf, buf_len, "INPUT: %s\n", str);
-        if(msglog != NULL) msglog->print(msglog, buf);
-    }
 
     if(strcmp(str, "chip") == 0)
     {
@@ -194,28 +240,108 @@ void input_callback(char* str, void* param)
 const wifiui_element_dtext_t* dtext_staip = NULL;
 void internet_connected(uint32_t ip_addr)
 {
+    s_ip_addr = ip_addr;
+    
     char ip_str[64];
     snprintf(ip_str, sizeof(ip_str), "current IP as STA: " IPSTR, IP2STR((esp_ip4_addr_t*)&ip_addr));
     if(dtext_staip != NULL) dtext_staip->change_text(dtext_staip, ip_str);
 }
 
+static void rot_encoder_on_right(void)
+{
+    if(screen_state == MENU_HOME)
+    {
+        home_selection_state++;
+        if(home_selection_state >= MENU__END) home_selection_state = MENU__END - 1;
+        if(home_selection_state >= home_head_pos + 2) home_head_pos++;
+        update_lcd();
+    }
+    else if(screen_state == MENU_ONOFF)
+    {
+        if(slider_LED_switch)
+        {
+            float toggled_value = (slider_LED_switch->current_value < 0.5f) ? 1.0f : 0.0f;
+            slider_LED_switch->set_value(slider_LED_switch, toggled_value);
+            led_color_changed_callback(0);
+        }
+    }
+    else if(screen_state == MENU_R || screen_state == MENU_G || screen_state == MENU_B)
+    {
+        if(slider_LED_red && slider_LED_green && slider_LED_blue)
+        {
+            if(screen_state == MENU_R) slider_LED_red->set_value(slider_LED_red, slider_LED_red->current_value + 1);
+            if(screen_state == MENU_G) slider_LED_green->set_value(slider_LED_green, slider_LED_green->current_value + 1);
+            if(screen_state == MENU_B) slider_LED_blue->set_value(slider_LED_blue, slider_LED_blue->current_value + 1);
+            led_color_changed_callback(0);
+        }
+    }
+}
+static void rot_encoder_on_left(void)
+{
+    if(screen_state == MENU_HOME)
+    {
+        if(home_selection_state > MENU_HOME + 1) home_selection_state--;
+        if(home_selection_state <= home_head_pos - 1) home_head_pos--;
+        update_lcd();
+    }
+    else if(screen_state == MENU_ONOFF)
+    {
+        if(slider_LED_switch)
+        {
+            float toggled_value = (slider_LED_switch->current_value < 0.5f) ? 1.0f : 0.0f;
+            slider_LED_switch->set_value(slider_LED_switch, toggled_value);
+            led_color_changed_callback(0);
+        }
+    }
+    else if(screen_state == MENU_R || screen_state == MENU_G || screen_state == MENU_B)
+    {
+        if(slider_LED_red && slider_LED_green && slider_LED_blue)
+        {
+            if(screen_state == MENU_R) slider_LED_red->set_value(slider_LED_red, slider_LED_red->current_value - 1);
+            if(screen_state == MENU_G) slider_LED_green->set_value(slider_LED_green, slider_LED_green->current_value - 1);
+            if(screen_state == MENU_B) slider_LED_blue->set_value(slider_LED_blue, slider_LED_blue->current_value - 1);
+            led_color_changed_callback(0);
+        }
+    }
+}
+static void rot_encoder_on_click(void)
+{
+    if(screen_state == MENU_HOME)
+    {
+        screen_state = home_selection_state;
+    }
+    else
+    {
+        screen_state = MENU_HOME;
+    }
+    update_lcd();
+}
+
+static void user_button_click(void)
+{
+    if(slider_LED_switch)
+    {
+        float toggled_value = (slider_LED_switch->current_value < 0.5f) ? 1.0f : 0.0f;
+        slider_LED_switch->set_value(slider_LED_switch, toggled_value);
+        led_color_changed_callback(0);
+    }
+}
+
 void app_main(void)
 {
-    wifiui_page_t* top_page = wifiui_create_page("WifiUI Sample");
-    wifiui_page_t* timeplot_page = wifiui_create_page("time-plot sample");
-    wifiui_page_t* scatter_page = wifiui_create_page("scatter-plot sample");
-    wifiui_page_t* scatter3d_page = wifiui_create_page("scatter3d-plot sample");
+    esp_log_level_set("dns_redirect_server", ESP_LOG_WARN);
 
-    /* Static & Dynamic text sample */
-    wifiui_add_html(top_page, "<p>This is WifiUI sample page.\nHello, World!</p>");
+    wifiui_page_t* top_page = wifiui_create_page("ESP32-S3 Expand Board");
+
+    /* Boot time */
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_time = wifiui_element_dynamic_text("Boot time: --")));
 
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Control", 2));
-    /* Switch&Slider sample */
-    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_switch = wifiui_element_switch("LED", false, NULL, led_color_changed_callback)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("LED", 2));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_switch = wifiui_element_switch("ON/OFF", false, NULL, led_color_changed_callback)));
     wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_red = wifiui_element_slider("R", 0, 127, 1, 32, "#f00", led_color_changed_callback)));
     wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_green = wifiui_element_slider("G", 0, 127, 1, 16, "#0f0", led_color_changed_callback)));
     wifiui_add_element(top_page, (const wifiui_element_t*) (slider_LED_blue = wifiui_element_slider("B", 0, 127, 1, 0, "#00f", led_color_changed_callback)));
+    wifiui_add_element(top_page, (const wifiui_element_t*) (timeplot_ROT_ENCODER = wifiui_element_timeplot("LED", 0, 255, 30, (char*[]){"R", "B", "G"}, 3)));
 
     /* Serial log & Text input sample */
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Mirror Console", 2));
@@ -227,30 +353,21 @@ void app_main(void)
     wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_ap_connect_form(internet_connected));
     wifiui_add_element(top_page, (const wifiui_element_t*) (dtext_staip = wifiui_element_dynamic_text("current IP as STA: --")));
 
-    /* 2D & 3D Plot links  */
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_heading("Plot pages", 2));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto time-plot sample page", timeplot_page));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto scatter-plot sample page", scatter_page));
-    wifiui_add_element(top_page, (const wifiui_element_t*) wifiui_element_link("goto scatter3D-plot sample page", scatter3d_page));
-
-    /* Time Plot sample */
-    wifiui_add_element(timeplot_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
-    wifiui_add_element(timeplot_page, (const wifiui_element_t*) (timeplot = wifiui_element_timeplot("Value", -2, 2, 30, (char*[]){"signalA", "signalB", "signalC"}, 3)));
-
-    /* Scatter (X-Y) Plot sample */
-    wifiui_add_element(scatter_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
-    wifiui_add_element(scatter_page, (const wifiui_element_t*) (scatterplot = wifiui_element_scatterplot("x", 0, 0, "y", 0, 0)));
-
-    /* 3D Scatter Plot sample */
-    wifiui_add_element(scatter3d_page, (const wifiui_element_t*) wifiui_element_link("goto top page", top_page));
-    wifiui_add_element(scatter3d_page, (const wifiui_element_t*) (scatter3dplot = wifiui_element_scatter3d_plot(0, 1, 0, 1, -0.5, 0.5)));
-
     init_LED();
     led_color_changed_callback(0.0); // LEDに初期値を反映
 
+    lcd_char2x8_init();
+    lcd_char2x8_write(0, "ESP32");
+
+    rot_encoder_init(rot_encoder_on_right, rot_encoder_on_left, rot_encoder_on_click);
+
+    switch_init(user_button_click);
+
     /* Start WifiUI */
-    wifiui_start("esp32-sample-", NULL, top_page);
+    wifiui_start(NULL, NULL, top_page);
 
     // create interval task
     xTaskCreate(status_send_task, "status_send_task", 4096, NULL, 5, NULL);
+
+    update_lcd();
 }

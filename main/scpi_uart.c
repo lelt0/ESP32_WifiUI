@@ -1,8 +1,7 @@
 #include "scpi_uart.h"
 
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
+#include <stdbool.h>
+#include <string.h>
 
 #include "driver/gpio.h"
 #include "driver/uart.h"
@@ -18,6 +17,84 @@
 #define SCPI_UART_LINE_SIZE  128
 
 static const char *TAG = "scpi_uart";
+static scpi_uart_step_cb_t s_step_callback = NULL;
+static void *s_step_user_data = NULL;
+static bool s_uart_configured = false;
+static bool s_rx_task_started = false;
+
+static void scpi_uart_rx_task(void *arg);
+
+static esp_err_t scpi_uart_start_rx_task(void)
+{
+    if (!s_uart_configured || s_rx_task_started || s_step_callback == NULL) {
+        return ESP_OK;
+    }
+
+    if (xTaskCreate(scpi_uart_rx_task,
+                    "scpi_uart_rx",
+                    3072,
+                    NULL,
+                    5,
+                    NULL) != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create UART RX task");
+        return ESP_ERR_NO_MEM;
+    }
+
+    s_rx_task_started = true;
+    ESP_LOGI(TAG, "UART SCPI receiver task started");
+    return ESP_OK;
+}
+
+esp_err_t scpi_uart_set_step_callback(scpi_uart_step_cb_t callback,
+                                      void *user_data)
+{
+    s_step_callback = callback;
+    s_step_user_data = user_data;
+    return scpi_uart_start_rx_task();
+}
+
+static bool scpi_uart_parse_step(const char *line, int8_t *step)
+{
+    static const char prefix[] = ":VOLUME:STEP ";
+    if (strncmp(line, prefix, sizeof(prefix) - 1) != 0) {
+        return false;
+    }
+
+    const char *argument = line + sizeof(prefix) - 1;
+    if (strcmp(argument, "+1") == 0) {
+        *step = 1;
+        return true;
+    }
+    if (strcmp(argument, "-1") == 0) {
+        *step = -1;
+        return true;
+    }
+
+    ESP_LOGW(TAG, "Invalid volume step command: %s", line);
+    return false;
+}
+
+static void scpi_uart_process_line(const char *line)
+{
+    int8_t step;
+    if (scpi_uart_parse_step(line, &step)) {
+        ESP_LOGI(TAG, "RX: %s", line);
+        if (s_step_callback != NULL) {
+            s_step_callback(step, s_step_user_data);
+        }
+        return;
+    }
+
+    /* Preserve the text-console echo for non-SCPI diagnostic input only. */
+    ESP_LOGI(TAG, "RX (console): %s", line);
+    size_t length = strlen(line);
+    if (length > 0 && uart_write_bytes(SCPI_UART_PORT, line, length) < 0) {
+        ESP_LOGE(TAG, "UART console echo data TX failed");
+    }
+    if (uart_write_bytes(SCPI_UART_PORT, "\n", 1) < 0) {
+        ESP_LOGE(TAG, "UART console echo terminator TX failed");
+    }
+}
 
 static void scpi_uart_rx_task(void *arg)
 {
@@ -38,34 +115,17 @@ static void scpi_uart_rx_task(void *arg)
 
         for (int i = 0; i < rx_len; ++i) {
             const uint8_t ch = rx_buffer[i];
-
             if (ch == '\r') {
                 continue;
             }
-
             if (ch == '\n') {
                 line_buffer[line_length] = '\0';
-                ESP_LOGI(TAG, "RX: %s", line_buffer);
-
-                /* Keep the original UART echo behavior for diagnostics. */
                 if (line_length > 0) {
-                    int tx_len = uart_write_bytes(SCPI_UART_PORT,
-                                                  line_buffer,
-                                                  line_length);
-                    if (tx_len < 0) {
-                        ESP_LOGE(TAG, "UART echo data TX failed");
-                    }
+                    scpi_uart_process_line(line_buffer);
                 }
-                if (uart_write_bytes(SCPI_UART_PORT, "\n", 1) < 0) {
-                    ESP_LOGE(TAG, "UART echo terminator TX failed");
-                } else {
-                    ESP_LOGI(TAG, "TX (echo): %s", line_buffer);
-                }
-
                 line_length = 0;
                 continue;
             }
-
             if (line_length < sizeof(line_buffer) - 1) {
                 line_buffer[line_length++] = (char)ch;
             } else {
@@ -78,22 +138,23 @@ static void scpi_uart_rx_task(void *arg)
     }
 }
 
-esp_err_t scpi_uart_send_volume(int32_t value)
+esp_err_t scpi_uart_send_volume_step(int8_t step)
 {
-    char command[32];
-    int length = snprintf(command, sizeof(command), ":VOLUME %ld\n", (long)value);
-    if (length < 0 || length >= (int)sizeof(command)) {
-        return ESP_ERR_INVALID_SIZE;
+    if (step != 1 && step != -1) {
+        return ESP_ERR_INVALID_ARG;
     }
 
-    int written = uart_write_bytes(SCPI_UART_PORT, command, (size_t)length);
-    if (written != length) {
-        ESP_LOGE(TAG, "Volume TX failed (written=%d, expected=%d)",
-                 written, length);
+    const char *command = (step > 0) ? ":VOLUME:STEP +1\n"
+                                    : ":VOLUME:STEP -1\n";
+    const size_t length = strlen(command);
+    int written = uart_write_bytes(SCPI_UART_PORT, command, length);
+    if (written != (int)length) {
+        ESP_LOGE(TAG, "Volume step TX failed (written=%d, expected=%u)",
+                 written, (unsigned)length);
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "TX: %.*s", length - 1, command);
+    ESP_LOGI(TAG, "TX: %.*s", (int)length - 1, command);
     return ESP_OK;
 }
 
@@ -135,25 +196,22 @@ esp_err_t scpi_uart_init(void)
         goto error;
     }
 
-    if (xTaskCreate(scpi_uart_rx_task,
-                    "scpi_uart_rx",
-                    3072,
-                    NULL,
-                    5,
-                    NULL) != pdPASS) {
-        err = ESP_ERR_NO_MEM;
-        ESP_LOGE(TAG, "Failed to create UART RX task");
-        goto error;
-    }
+    s_uart_configured = true;
 
     ESP_LOGI(TAG,
-             "UART1 ready: TX=GPIO%d, RX=GPIO%d, baud=%d",
+             "UART1 configured: TX=GPIO%d, RX=GPIO%d, baud=%d",
              SCPI_UART_TX_GPIO,
              SCPI_UART_RX_GPIO,
              SCPI_UART_BAUD_RATE);
+    /* RX starts when the rotary-encoder event queue/callback is ready. */
+    err = scpi_uart_start_rx_task();
+    if (err != ESP_OK) {
+        goto error;
+    }
     return ESP_OK;
 
 error:
+    s_uart_configured = false;
     uart_driver_delete(SCPI_UART_PORT);
     return err;
 }

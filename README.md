@@ -1,375 +1,75 @@
-# WifiUIとは？
+# ESP32-P4-NANO / ESP32-S3 UART volume control
 
-**Wifi経由で開けるESP32のGUI作成ライブラリ**  
-ESP32のワイヤレスUIが作成できます
+This archive contains the ESP32-S3-side files to add or replace under `main/`.
+Extract the archive into the **ESP32-S3 project root**. Only the listed files
+are included; other files in `main/` remain untouched. The existing
+`main/CMakeLists.txt` is intentionally unchanged. This README replaces the
+older root-level `README_UART_ECHO.txt`; remove that old file from the S3
+repository after extracting this archive if it is still present.
 
-- 動的テキスト
-- ボタン
-- スライダー
-- 2D、3Dグラフ
-- 外部Wifi接続フォーム
-- Serialコンソール
+## Wiring
 
-などをサポートしています。
+Connect the boards using crossed TX/RX lines and a common ground:
 
-<img src="doc/res/Screenshot_20250828_005012_Captive Portal Login.jpg" width="200">
+| ESP32-S3 Expand Board | ESP32-P4-NANO |
+| --- | --- |
+| GPIO17 (UART1 TX) | GPIO23 (UART1 RX) |
+| GPIO18 (UART1 RX) | GPIO22 (UART1 TX) |
+| GND | GND |
 
----
-# Getting Started
+Both interfaces use 3.3 V TTL. Do not connect 5 V UART signals.
 
-## 動作環境
+## UART settings
 
-- ESP-IDF v6.0.0
-- ESP32-S3で動作確認済み
+- UART: UART1
+- Baud rate: 115200 bit/s
+- Format: 8 data bits, no parity, 1 stop bit (8N1)
+- Flow control: disabled
+- Line ending: LF (`\n`); CRLF is also accepted
 
-## サンプル実行手順
+## SCPI command list
 
-サンプル `main/main.c` では、ESP32-S3開発ボードのRGB LEDを操作するUIを作成しています。
+Commands are sent as one LF-terminated line:
 
-1. 本プロジェクトをビルドしESP32にFlash
-    1. `idf.py menuconfig` でWebSocketを有効化する > 詳細：[ESP-IDFでWebSocket有効化](#ESP32での実装方法)
-    1. build & Flash（`idf.py build flash`）
-1. ESP32を起動
-1. PCやスマホで **SSID: esp32-XXXXXX**（XXXXXXはESP32のMACアドレス下6桁）に接続  
-1. **「ネットワークにサインイン」** を選択  
-    （iOSやWindowsはこの操作は不要かもしれない）  
-    <img src="doc/res/image-8.png" width="100">
-1. UIページが立ち上がる  
-    <img src="doc/res/Screenshot_20250828_005012_Captive Portal Login.jpg" width="100">
+| Command | Effect |
+| --- | --- |
+| `:VOLUME:STEP +1` | Apply one positive volume step |
+| `:VOLUME:STEP -1` | Apply one negative volume step |
 
----
-# デベロッパーマニュアル
-## 開発環境
-- VS Code
-    - ESP-IDF V6.0.0 Extension (詳細はRADECHのドキュメント、もしくは[ESP32S3_helloworld](https://github.com/lelt0/ESP32S3_helloworld)を参照)
-- ESP32
-    - 無印もしくはS3で動作確認
+The command represents an operation, not an absolute value. The receiver
+applies the same direction of operation as a right/left turn of the S3 rotary
+encoder. The sender does not transmit its current dial value.
 
-## UI作成の流れ
-  
-以下では例として「スライダー要素」を持つUIページを作成します。
+## Behavior
 
-1. **IDF環境へ本コンポーネントを追加**
-    1. `idf.py add-dependency --git https://github.com/lelt0/ESP32_WifiUI.git --git-path components/wifi_ui wifi_ui`
-    1. `idf.py reconfigure`
+- Turning the S3 rotary encoder performs its existing local menu/LED action
+  and sends the corresponding step to the NANO GUI dial.
+- A step received from the NANO is placed on the rotary-encoder event queue
+  and runs the same right/left callback path as a physical turn. It is not
+  transmitted back to the NANO.
+- Turning the NANO GUI dial sends one command for each value step to the S3.
+- Holding the center of the NANO dial resets only the NANO dial and its `Value`
+  label to 0; it does not reset the S3 or send a reset command.
+- The two devices exchange relative `+1` / `-1` operations, not a shared
+  absolute value.
 
-1. **ソースコード例**
-    
-    ```c
-    #include <stdio.h>
-    #include <wifiui_server.h> // WifiUI必須ヘッダー
-    #include <wifiui_element_slider.h> // +必要な要素のヘッダーをinclude
+## Build and test
 
-    static void slider_changed_callback(float); // スライダーの値変更時のコールバック関数
+Build and flash this project and the companion NANO project. Monitor each
+board's ESP-IDF log to see `TX` and `RX` records from `scpi_uart`. Test both
+ends of the dial/encoder and confirm that valid SCPI commands do not bounce
+back and forth.
 
-    void app_main(void)
-    {
-        /* 1.ページを作成 */
-        wifiui_page_t* top_page = wifiui_create_page("WifiUI Sample");
-        wifiui_add_html(top_page, "<p>This is a sample page using WifiUI.</p>"); // Add static HTML to the page
+The S3 UART RX task starts after the rotary-encoder event queue and callback
+are ready, so early NANO commands remain buffered by the UART driver during
+S3 application startup. The S3 still echoes non-SCPI diagnostic text lines.
+Valid `:VOLUME:STEP` commands are consumed and are not echoed.
 
-        /* 2.スライダー要素の作成とページへの追加 */
-        const wifiui_element_slider_t* slider_instance = wifiui_element_slider("slider", 0, 100, 1, 50, "#f00", slider_changed_callback); // Create a slider element
-        wifiui_add_element(top_page, (const wifiui_element_t*) slider_instance); // Add to the page
+## Source branches used
 
-        /* 3.UIサーバーの開始 */
-        wifiui_start(NULL, NULL, top_page);
-    }
+- NANO: [lelt0/ESP32P4-LVGL-touch-UI](https://github.com/lelt0/ESP32P4-LVGL-touch-UI/tree/feature/scpi)
+- S3: [lelt0/ESP32_WifiUI](https://github.com/lelt0/ESP32_WifiUI/tree/feature/expand_board_scpi)
 
-    static void slider_changed_callback(float value)
-    {
-        printf("slider value changed: %.0f\n", value);
-    }
-    ```
-
-1. **ビルドとFlash**  
-    ビルド・Flashは本READMEの「[サンプル実行手順](#サンプル実行手順)」を参照してください
-
-1. 上記の例では以下のUIが生成されます  
-    <img src="doc/res/image-9.png" width="250">
-
-## UI要素
-
-以下の要素を使用できます。詳細はヘッダファイルを参照してください。
-
-- 見出し
-    - <img src="doc/res/image-17.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_heading.h>`
-- 静的テキスト（HTML）
-    - <img src="doc/res/image-11.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_stext.h>`
-- 動的テキスト
-    - <img src="doc/res/image-13.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_dtext.h>`
-- ボタン
-    - <img src="doc/res/image-14.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_button.h>`  
-- スイッチ
-    - <img src="doc/res/image-12.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_slider.h>`
-- スライダー
-    - <img src="doc/res/image-23.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_slider.h>`
-- テキスト入力
-    - <img src="doc/res/image-18.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_input.h>`
-- シリアルコンソール
-    - 標準出力と標準エラー出力を表示します
-    - <img src="doc/res/image-16.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_serial_log.h>`
-- 無線LAN接続
-    - SSIDとパスワードで外部アクセスポイントに接続します
-    - <img src="doc/res/image-19.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_ap_connect_form.h>`
-- 他ページへのリンク
-    - <img src="doc/res/image-15.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_link.h>`
-- 時系列グラフ
-    - <img src="doc/res/image-20.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_timeplot.h>`
-- 散布図
-    - <img src="doc/res/image-21.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_scatterplot.h>`
-- 3D散布図
-    - <img src="doc/res/image-22.png" width="200" style="max-width: 200px; border: 1px solid #DDD;">
-    - `#include <wifiui_element_scatter3d_plot.h>`
-
----
-# トラブルシューティング
-## ESP-IDF ビルドエラー
-- トラブル：以下のように不可解なビルドエラーになる
-    ```
-    C:/Users/delle/esp/v5.4.1/esp-idf/components/esp_lcd/rgb/esp_lcd_panel_rgb.c: In function 'rgb_panel_draw_bitmap': 
-    C:/Users/delle/esp/v5.4.1/esp-idf/components/esp_lcd/rgb/esp_lcd_panel_rgb.c:681:1: internal compiler error: Segmentation fault
-     681 | } | ^ 
-     Please submit a full bug report, with preprocessed source (by using -freport-bug). 
-     See <https://gcc.gnu.org/bugs/> for instructions.
-    ```
-- 解決方法：
-1. buildフォルダを手動で削除
-1. `idf.py fullclean`
-1. `idf.py build`
-
----
-# 内部仕様（開発メモ）
-
-## 全体シーケンス
-```mermaid
-sequenceDiagram
-participant User as User Device
-participant DNS as DNS Server
-participant WWW as Web Server
-
-%% キャプティブポータルの流れ
-User->>DNS: DNS query for any domain
-DNS-->>User: Resolve to AP IP (captiveportal URI)
-User->>WWW: HTTP GET /any-uri
-WWW-->>User: 302 Redirect to captive portal (captiveportal_uri)
-User->>WWW: GET /top_page (index.html)
-WWW-->>User: Respond HTML + WS initialization script
-
-%% WebSocket 接続とハートビート
-User->>WWW: WebSocket Upgrade (ws://...)
-WWW-->>WWW: Update active_page
-WWW-->>User: 101 Switching Protocols (WS open)
-Note over User,WWW: WebSocket channel established
-par Heartbeat
-    User->>WWW: WS: ping every seconds#59; element_id == 0
-    WWW-->>User: WS: pong (wifiui_ws_send_pong)
-end
-
-%% アクティブページ追跡と要素操作
-Note over WWW: Track active clients and pages (client_info_t)
-User->>WWW: WS: element action#59; element_id == X (e.g. slider change)
-WWW-->>WWW: element callback
-WWW->>User: WS: element update#59; element_id == X (wifiui_ws_send_element_data_async)
-User-->>User: element action
-
-%% 切断検知・クリーンアップ
-Note over WWW: Monitor last_access_time, close unused clients when needed
-```
-
-## キャプティブポータル
-特に公衆Wi-Fiなどのネットワークに接続したときに、インターネットアクセスの前にユーザーにログインや同意を求めるWebページを表示する仕組み。  
-WifiUIではこのキャブティブポータルで自動でOSのミニブラウザが特定のURIにアクセスする仕組みを利用し、  
-ユーザがIPアドレスを直接ブラウザに打ち込まなくてもESP32のUIにアクセスできる仕組みを作った
-
-### 実装のポイント
-Captive PortalはOSが自動的にインターネットへのアクセスを試行し、インターネット接続できなければリダイレクトされたページを(ミニ)ブラウザで表示する。  
-つまり、基本的には
-- ESP32内のDNSサーバで任意のドメインをESP32のアクセスポイントIPとして解決させること
-- ESP32内のHTTPサーバで予期しないURIへのアクセスをすべて用意したポータルサイト（index.htmlなど）にリダイレクトすること  
-
-ができればCaptive Portalを実現できる。
-
-ただし、このインターネットアクセス試行先URLや「インターネットに繋がった」とみなす判定方法がOS（もしくはベンダー）ごとに異なるのがクセモノ。  
-以下に自分のほうで調べたものも含め、各OSの挙動を示す。
-
-- **Google Android, ChromeOSの場合（主にGoogle製のもの）：**  
-`http://connectivitycheck.gstatic.com/generate_204`にアクセス可能かでインターネット接続を判定する。  
-もしインターネット接続できている場合はこのページが`204 No Content`を返すので、その場合はキャプティブポータル無しと判断する。
-    - **Samsungスマートフォン：**  
-    これがクセが強く、リダイレクトするIPアドレスが192.168.xxx.xxxなどのprivate IPだとCaptive Portalと認識してくれず、「接続が不安定」などと表示されブラウザが自動で起動しない。  
-    対策としてはpublicなIPアドレスを指定する必要がある。
-        - しかし愚直にpublicなIPアドレスを指定すると、複数のNICを持つデバイスで1つのネットワークインターフェース（NI）でインターネットに、もうひとつのNIでESP32に接続した場合、publicなIPアドレスをネットにつながった方のNIで解決しようとするのでESP32のUIページに誘導できない問題がある。  
-        （そもそもCaptivePortalはインターネットアクセスを承認するための仕組みなので、インターネットに接続できているならPortalページを開く必要がないのは正しい挙動なのだが…）
-        なのでこのケースではクライアント端末側で対応するしかないかも。例えばWindowsであれば自動メトリックをOFFにして、Wifiを有線LANより優先させるとか…
-- **Apple macOS, iOS/iPadOSの場合（Apple製のもの）**  
-`http://captive.apple.com/hotspot-detect.html`にアクセスして、  
-`<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>`  
-が返ってきたらキャプティブポータル無しと判断する。  
-それ以外のコンテンツが返ってきたら、ブラウザを自動起動してそれを表示する
-- **Microsoft Windowsの場合**  
-    - **Windows10,11**  
-    `http://www.msftconnecttest.com/connecttest.txt`にアクセスして、文字列`Microsoft Connect Test`が返った場合は、キャプティブポータル無しと判断する。  
-    異なるコンテンツが返ってきたら、`http://www.msftconnecttest.com/redirect`にアクセスしてそのコンテンツを表示する。  
-        - なお、WindowsにはNetwork Connectivity Status Indicator (NCSI) という仕組みがあり、これが20～30秒間隔で`connecttest.txt`にアクセスしてくるので、ポータルページを開いているときは定期的にアクセスログが出てくる
-        - また、プロキシサーバー自動検出のため、WindowsのWPAD機能が有効になっている場合は`http://wpad/wpad.dat`へ頻繁にアクセスしてくる。このアクセスがあまりにも多いとESP32がパニックになるので、`/wpad.dat`へのアクセスには**404**を返すといい
-    - **Windows8.1以前**  
-    上記`http://www.msftconnecttest.com/connecttest.txt`の代わりに`http://www.msftncsi.com/ncsi.txt`を用いる[らしい](https://learn.microsoft.com/ja-jp/troubleshoot/windows-client/networking/internet-explorer-edge-open-connect-corporate-public-network)  
-- **FireFox**  
-Firefoxの独自実装として、`http://detectportal.firefox.com/success.txt`にアクセスしてステータス200で文字列`success`が返ればポータルなしと判断する。
-
-上記のように各OSごとにCaptivePortalの挙動が異なるのはやはり問題視されているようで、
-2020年に[RFC 8908](https://datatracker.ietf.org/doc/html/rfc8908)などで標準化された。  
-しかし、2025年8月現在まだあまり普及していないらしく、今回のコードでも実装していない。
-
-### 参考ページ
-- [espressif ESP-IDF公式のcaptive portalサンプル](https://github.com/espressif/esp-idf/tree/master/examples/protocols/http_server/captive_portal) ただし基本的なCaptivePortalのみの実装で、すべてのOSのCaptivePortalに対応しているわけではない
-- [有志によるCaptivePortalの実装](https://github.com/CDFER/Captive-Portal-ESP32) ただしArduinoライブラリを使っており約700kBも使ってしまうので
-
-## Ploty.js
-自作のグラフ描画スクリプト. 簡単な2Dプロットおよび3Dプロットを描画可能  
-使用方法は /ploty/src/ploty.js などを参照  
-  
-### ビルド方法（minify & gzip）
-1. `cd ploty`
-1. `npm run build`
-1. components/wifi_ui/assets/ploty.min.js.gz ができる
-1. ESPではバイナリファイルを以下のようにROM領域に埋め込むことができる (cf.[ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-guides/build-system.html#embedding-binary-data))
-    ```CMake
-    # components\wifi_ui\CMakeLists.txt
-    target_add_binary_data(${COMPONENT_LIB} "./assets/ploty.min.js.gz" BINARY)
-    ```
-    ```c
-    extern const uint8_t ploty_min_js_gz_start[] asm("_binary_ploty_min_js_gz_start");
-    extern const uint8_t ploty_min_js_gz_end[]   asm("_binary_ploty_min_js_gz_end");
-    const size_t len = ploty_min_js_gz_end - ploty_min_js_gz_start;
-    ```
-
-## WebSocket通信
-ウェブブラウザなどのクライアントとサーバーの間で、リアルタイムかつ双方向の通信を可能にする通信プロトコル.  
-一度接続が確立されると、その接続が維持され、その間はサーバ・クライアントともに任意のタイミングでデータ送信が可能。  
-いつ接続が切断されるかはOS依存っぽい（例えばスマホ機種によって、アプリを明確に終了しなければ切れなかったり、「戻る」操作だけで切れたり）  
-
-ちなみにESP-IDFには[WebSocket Client](https://docs.espressif.com/projects/esp-idf/en/v4.2/esp32/api-reference/protocols/esp_websocket_client.html)のコンポーネントもあったが、あまり余計なライブラリに依存したくなかたのですべて[HTTP_Server](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/protocols/esp_http_server.html)だけで実現した。
-
-### ESP32での実装方法
-1. `idf.py menuconfig`でWebSocketを有効化する
-    1. `idf.py menuconfig`
-    1. `[*] Enable WebSocket support`  
-        ![alt text](doc/res/image.png)
-    1. `sdkconfig`が更新される  
-        ![alt text](doc/res/image-1.png)
-1. C実装
-    - **（ESP32にとっての）受信**  
-        WebSocket URIに対するイベントハンドラで処理すればOK  
-        - NOTE: `httpd_ws_recv_frame()`1回で取得しようとしたがなぜか取得できず（バッファが更新されず）、  
-        以下のように`httpd_ws_recv_frame()`を2回呼ぶことで取得できるようになった（length取得→payload取得）。
-        ```C
-        static esp_err_t ws_status_handler(httpd_req_t *req) {
-
-            // ...
-
-            // Websocket message receiving
-
-            httpd_ws_frame_t ws_pkt;
-            memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-            ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-            esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0); // to get frame length
-            if (ret != ESP_OK) {
-                // httpd_ws_recv_frame failed to get frame len
-                return ret;
-            }
-            if (ws_pkt.len)
-            {
-                uint8_t *buf = (uint8_t*)calloc(1, ws_pkt.len + 1);
-                ws_pkt.payload = buf;
-                ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len); // to receive frame payload
-                if (ret != ESP_OK) {
-                    // httpd_ws_recv_frame failed
-                    free(buf);
-                    return ret;
-                }
-                free(buf);
-            }
-            return ESP_OK;
-        }
-        ```
-    - **（ESP32にとっての）送信**  
-        ESP-IDFのAPI的にWebSocketで接続したクライアントを覚えておいてくれないみたいなので、  
-        クライアントのファイルディスクリプタを覚えておく機能を自前で実装した。  
-
-        ESP32からデータを送信する際は、そのファイルディスクリプタ経由で送信する。  
-
-        なお、ESP32への負荷軽減のため、以下の制約がある
-        - 1つのクライアントと接続できるWebSocketは1つのみ  
-            ← 死んでいるページにWebSocketで送信しまくっても意味がなく、負荷になるだけなので
-        - 接続できるクライアントは2台まで  
-
-        以下具体的な実装
-        1. クライアント登録  
-            クライアントからWebSocket接続要求がありコネクションが確立されるときはクライアントからGETリクエストが送信される。  
-            そのときに、クライアントの**IPアドレス**と**ファイルディスクリプタ**のセットを覚えておく  
-
-            もしすでに接続済みのクライアントだった場合、新しいファイルディスクリプタで上書きする
-        1. データ送信  
-            1.で記憶したファイルディスクリプタに向けて`httpd_ws_send_frame_async()`で送信する  
-            - NOTE: WebSocket送信関数として、
-                - httpd_ws_send_frame()
-                - httpd_ws_send_frame_async() *
-                - httpd_ws_send_data() *  
-                - httpd_ws_send_data_async()
-
-                が用意されているが、なぜか動作したのは「*」がついた2つだけだった。なぜ？  
-        1. クライアント切断  
-            データ送信時に送信失敗した場合、切断されたとみなし**IPアドレス**と**ファイルディスクリプタ**のセットを削除する  
-        
-    - **バイナリデータの送受信**  
-    3Dプロットのデータ送信は、点数が多いのでバイナリデータで送受信している。  
-    WebSocket通信が確立すると、サーバ側で定期送信用タスクを立ち上げて送信。WebSocket通信が切れるとタスクも終了。  
-    詳細はソースコード参照。  
-
-## ESP-IDFプロジェクトのフォルダ構成
-ESP-IDFのお作法に従い、以下のような構成になっている。  
-
-project_dir  
-├ CMakeLists.txt  
-├ main  
-│├ CMakeLists.txt  
-│└ main.c  
-├ components  
-│└wifi_ui  # 各自作コンポーネントが並ぶ  
-│ ├include  
-│ │└ *yyy.h*  
-│ ├ CMakeLists.txt  
-│ └ *yyy.c*  
-├ sdkconfig  
-...
-
-### ESP-IDFコンポーネントのリンク方法
-
-mainフォルダ以下とcomponentsフォルダ以下でESP-IDFコンポーネントの解決方法が異なる。  
-
-ESP-IDF には 「自動依存解決 (auto-require)」 という仕組みがあります。
-- あるコンポーネントが**公開ヘッダーファイル (include ディレクトリにあるもの) **を利用するとき、そのヘッダを提供しているコンポーネントをビルドシステムが自動的に見つけて依存に追加してくれます。
-- しかし、別コンポーネントから呼ぶ場合は例外。そのコンポーネントの CMakeLists.txt に REQUIRES で明示しないといけません。
-
-つまり、mainフォルダ内ではCMakeLists.txtに何も書かなくてもヘッダーを使っていればコンポーネントが自動解決されるが、  
-componentsフォルダ以下の独自の wifi_ui コンポーネントでは手動で PRIV_REQUIRES する必要がある。  
-
-NOTE:  
-FreeRTOSでC++ソースを混ぜて使う場合は、**extern "C"** void app_main(void)する必要がある。  
-
-## ESP32のログ介入
-WifiUIにシリアルログをミラーリングするため、UIページにシリアルログが含まれる場合、標準出力や標準エラー出力を盗んでいる。（`esp_vfs_register_fs` & `freopen`）
+The archive is based on NANO commit `1a7d9e7a3df70500d85866df92f94db68cf34aa6` and S3 commit `573dbb5a9b70e675b2b2e0e0122a9b2857ed73d3`.
+The sources were reviewed, but no ESP-IDF build, flash, or physical-board test
+was performed while preparing this archive.

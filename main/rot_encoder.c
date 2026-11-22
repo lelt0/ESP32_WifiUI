@@ -9,6 +9,7 @@
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "esp_err.h"
+#include "esp_log.h"
 
 #include "scpi_uart.h"
 
@@ -16,13 +17,14 @@
 #define ROT_ENCODER_GPIO_B GPIO_NUM_46
 #define ROT_ENCODER_GPIO_SW GPIO_NUM_47
 
-#define ROT_ENCODER_QUEUE_SIZE 8
+#define ROT_ENCODER_QUEUE_SIZE 32
 #define ROT_ENCODER_BUTTON_DEBOUNCE_US 50000
-#define ROT_ENCODER_VOLUME_LIMIT 1000000
 
 typedef enum {
     ROT_ENCODER_EVENT_RIGHT,
     ROT_ENCODER_EVENT_LEFT,
+    ROT_ENCODER_EVENT_REMOTE_RIGHT,
+    ROT_ENCODER_EVENT_REMOTE_LEFT,
     ROT_ENCODER_EVENT_BUTTON_EDGE,
 } rot_encoder_event_type_t;
 
@@ -31,13 +33,24 @@ typedef struct {
     uint8_t level;
 } rot_encoder_event_t;
 
+static const char *TAG = "rot_encoder";
 static QueueHandle_t s_rot_encoder_queue = NULL;
 static bool s_rot_encoder_initialized = false;
 static int8_t s_current_a_level = 0;
-static bool s_rot_event_dead_time = false; // チャタリング防止のためAエッジでボリュームイベント発生後、Bエッジまでは不感とする
+static bool s_rot_event_dead_time = false; // チャタリング防止のためAエッジでイベント発生後、Bエッジまでは不感とする
 static void (*s_rot_encoder_on_right)(void) = NULL;
 static void (*s_rot_encoder_on_left)(void) = NULL;
 static void (*s_rot_encoder_on_click)(void) = NULL;
+
+static void rot_encoder_scpi_step_received(int8_t step, void *user_data)
+{
+    (void)user_data;
+    esp_err_t err = rot_encoder_apply_remote_step(step);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Could not queue remote volume step (%d): %s",
+                 (int)step, esp_err_to_name(err));
+    }
+}
 
 static void IRAM_ATTR rot_encoder_gpio_isr(void *arg)
 {
@@ -46,12 +59,12 @@ static void IRAM_ATTR rot_encoder_gpio_isr(void *arg)
     BaseType_t woken = pdFALSE;
 
     if (gpio == ROT_ENCODER_GPIO_A) {
-        if(s_rot_event_dead_time) return;
+        if (s_rot_event_dead_time) return;
         s_rot_event_dead_time = true;
 
-        bool a_raising = (s_current_a_level == 0); // Aエッジが立ち上がりかどうかはBエッジのときのAレベルを用いて判定する. チャタリングによってエッジ付近はレベルが揺れるのでここでAレベルは読まない
+        bool a_raising = (s_current_a_level == 0); // Aエッジ方向はBエッジ時のAレベルで判定する
         int b = gpio_get_level(ROT_ENCODER_GPIO_B);
-        if((a_raising && !b) || (!a_raising && b)) {
+        if ((a_raising && !b) || (!a_raising && b)) {
             event.type = ROT_ENCODER_EVENT_RIGHT;
         } else {
             event.type = ROT_ENCODER_EVENT_LEFT;
@@ -78,11 +91,10 @@ static void IRAM_ATTR rot_encoder_gpio_isr(void *arg)
 
 static void rot_encoder_task(void *arg)
 {
-    (void) arg;
+    (void)arg;
     rot_encoder_event_t event;
     int64_t last_button_time = 0;
     bool button_down = false;
-    int32_t volume_value = 0;
 
     s_current_a_level = gpio_get_level(ROT_ENCODER_GPIO_A);
     while (true) {
@@ -102,25 +114,27 @@ static void rot_encoder_task(void *arg)
                 button_down = true;
             } else if (button_down) {
                 button_down = false;
-                s_rot_encoder_on_click();
+                if (s_rot_encoder_on_click != NULL) {
+                    s_rot_encoder_on_click();
+                }
             }
             continue;
         }
 
-        if (event.type == ROT_ENCODER_EVENT_RIGHT) {
-            if (volume_value < ROT_ENCODER_VOLUME_LIMIT) {
-                volume_value++;
+        if (event.type == ROT_ENCODER_EVENT_RIGHT ||
+            event.type == ROT_ENCODER_EVENT_REMOTE_RIGHT) {
+            if (event.type == ROT_ENCODER_EVENT_RIGHT) {
+                (void)scpi_uart_send_volume_step(1);
             }
-            (void)scpi_uart_send_volume(volume_value);
-            if (s_rot_encoder_on_right) {
+            if (s_rot_encoder_on_right != NULL) {
                 s_rot_encoder_on_right();
             }
-        } else if (event.type == ROT_ENCODER_EVENT_LEFT) {
-            if (volume_value > -ROT_ENCODER_VOLUME_LIMIT) {
-                volume_value--;
+        } else if (event.type == ROT_ENCODER_EVENT_LEFT ||
+                   event.type == ROT_ENCODER_EVENT_REMOTE_LEFT) {
+            if (event.type == ROT_ENCODER_EVENT_LEFT) {
+                (void)scpi_uart_send_volume_step(-1);
             }
-            (void)scpi_uart_send_volume(volume_value);
-            if (s_rot_encoder_on_left) {
+            if (s_rot_encoder_on_left != NULL) {
                 s_rot_encoder_on_left();
             }
         }
@@ -161,6 +175,33 @@ void rot_encoder_init(rot_encoder_callback_t on_right,
     gpio_isr_handler_add(ROT_ENCODER_GPIO_B, rot_encoder_gpio_isr, (void *) ROT_ENCODER_GPIO_B);
     gpio_isr_handler_add(ROT_ENCODER_GPIO_SW, rot_encoder_gpio_isr, (void *) ROT_ENCODER_GPIO_SW);
 
-    xTaskCreate(rot_encoder_task, "rot_encoder", 2048, NULL, 5, NULL);
+    if (xTaskCreate(rot_encoder_task, "rot_encoder", 2048, NULL, 5, NULL) != pdPASS) {
+        return;
+    }
+
     s_rot_encoder_initialized = true;
+    err = scpi_uart_set_step_callback(rot_encoder_scpi_step_received, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start SCPI receiver: %s", esp_err_to_name(err));
+    }
+}
+
+esp_err_t rot_encoder_apply_remote_step(int8_t step)
+{
+    if (step != 1 && step != -1) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_rot_encoder_initialized || s_rot_encoder_queue == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    rot_encoder_event_t event = {
+        .type = (step > 0) ? ROT_ENCODER_EVENT_REMOTE_RIGHT
+                           : ROT_ENCODER_EVENT_REMOTE_LEFT,
+        .level = 0,
+    };
+    if (xQueueSend(s_rot_encoder_queue, &event, 0) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+    return ESP_OK;
 }

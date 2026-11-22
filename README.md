@@ -1,11 +1,7 @@
-# ESP32-P4-NANO / ESP32-S3 UART volume control
+# ESP32-S3 Expand Board / ESP32-P4-NANO UART control
 
-This archive contains the ESP32-S3-side files to add or replace under `main/`.
-Extract the archive into the **ESP32-S3 project root**. Only the listed files
-are included; other files in `main/` remain untouched. The existing
-`main/CMakeLists.txt` is intentionally unchanged. This README replaces the
-older root-level `README_UART_ECHO.txt`; remove that old file from the S3
-repository after extracting this archive if it is still present.
+This project exchanges rotary-encoder operations and switch state between an
+ESP32-S3 Expand Board and an ESP32-P4-NANO touch UI over UART1.
 
 ## Wiring
 
@@ -25,51 +21,73 @@ Both interfaces use 3.3 V TTL. Do not connect 5 V UART signals.
 - Baud rate: 115200 bit/s
 - Format: 8 data bits, no parity, 1 stop bit (8N1)
 - Flow control: disabled
-- Line ending: LF (`\n`); CRLF is also accepted
+- Line ending: LF (`\n`); CR is ignored by the receiver
 
-## SCPI command list
+## SCPI commands
 
-Commands are sent as one LF-terminated line:
+Each command is sent as one LF-terminated line.
 
-| Command | Effect |
+| Command | Meaning |
 | --- | --- |
 | `:VOLUME:STEP +1` | Apply one positive volume step |
 | `:VOLUME:STEP -1` | Apply one negative volume step |
+| `:SWITCH:STATE 0` | Set the switch state to OFF |
+| `:SWITCH:STATE 1` | Set the switch state to ON |
 
-The command represents an operation, not an absolute value. The receiver
-applies the same direction of operation as a right/left turn of the S3 rotary
-encoder. The sender does not transmit its current dial value.
+Volume commands are relative operations. They do not transfer an absolute
+volume value. Switch commands transfer an explicit state (`0` or `1`).
 
 ## Behavior
 
+### Volume
+
 - Turning the S3 rotary encoder performs its existing local menu/LED action
-  and sends the corresponding step to the NANO GUI dial.
-- A step received from the NANO is placed on the rotary-encoder event queue
-  and runs the same right/left callback path as a physical turn. It is not
-  transmitted back to the NANO.
-- Turning the NANO GUI dial sends one command for each value step to the S3.
-- Holding the center of the NANO dial resets only the NANO dial and its `Value`
-  label to 0; it does not reset the S3 or send a reset command.
+  and sends the corresponding `:VOLUME:STEP` command to the NANO.
+- A volume step received from the NANO is placed on the rotary-encoder event
+  queue and follows the same right/left callback path as a physical turn.
+  Remote steps are not transmitted back to the NANO.
 - The two devices exchange relative `+1` / `-1` operations, not a shared
   absolute value.
+- Holding the center of the NANO dial resets only the NANO dial and its
+  `Value` label to 0; it does not reset the S3 or send a reset command.
+
+### Switch
+
+- Pressing the S3 board's tact switch toggles the S3-side switch state, invokes
+  the existing application callback, and sends the resulting state to the
+  NANO using `:SWITCH:STATE 0` or `:SWITCH:STATE 1`.
+- A state received from the NANO is applied to the S3-side state. When the
+  state changes, the existing application callback is invoked so the board's
+  LED follows the NANO switch.
+- A state received from the NANO is not transmitted back. Likewise, the NANO
+  does not retransmit a state it received from the S3.
+- Both sides are initialized to OFF. There is no separate startup
+  state-negotiation or handshake command.
 
 ## Build and test
 
-Build and flash this project and the companion NANO project. Monitor each
-board's ESP-IDF log to see `TX` and `RX` records from `scpi_uart`. Test both
-ends of the dial/encoder and confirm that valid SCPI commands do not bounce
-back and forth.
+Build and flash this project together with the companion ESP32-P4-NANO project.
+Monitor the ESP-IDF log and check the `scpi_uart` `TX` / `RX` records.
 
-The S3 UART RX task starts after the rotary-encoder event queue and callback
-are ready, so early NANO commands remain buffered by the UART driver during
-S3 application startup. The S3 still echoes non-SCPI diagnostic text lines.
-Valid `:VOLUME:STEP` commands are consumed and are not echoed.
+1. Turn the S3 rotary encoder in both directions and confirm that the NANO
+   dial follows.
+2. Turn the NANO dial in both directions and confirm that the S3 follows.
+3. Change the NANO GUI switch to ON and OFF and confirm that the S3 LED follows.
+4. Press the S3 tact switch and confirm that the NANO GUI switch follows.
+5. Confirm that received commands are not echoed back as new commands.
 
-## Source branches used
+The source changes are supplied separately as files for the S3 project's
+`main/` directory. The existing `main/CMakeLists.txt` must remain unchanged;
+in particular, keep this registration line:
+
+```cmake
+idf_component_register(SRCS main.c rot_encoder.c switch.c lcd_char2x8.c scpi_uart.c)
+```
+
+## Companion project
 
 - NANO: [lelt0/ESP32P4-LVGL-touch-UI](https://github.com/lelt0/ESP32P4-LVGL-touch-UI/tree/feature/scpi)
 - S3: [lelt0/ESP32_WifiUI](https://github.com/lelt0/ESP32_WifiUI/tree/feature/expand_board_scpi)
 
-The archive is based on NANO commit `1a7d9e7a3df70500d85866df92f94db68cf34aa6` and S3 commit `573dbb5a9b70e675b2b2e0e0122a9b2857ed73d3`.
-The sources were reviewed, but no ESP-IDF build, flash, or physical-board test
-was performed while preparing this archive.
+The Step 4 source changes have not been built or tested on physical hardware
+as part of this README update.

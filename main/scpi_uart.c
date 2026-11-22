@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "driver/gpio.h"
 #include "driver/uart.h"
@@ -46,7 +47,7 @@ static void scpi_uart_rx_task(void *arg)
                 line_buffer[line_length] = '\0';
                 ESP_LOGI(TAG, "RX: %s", line_buffer);
 
-                /* Echo the complete line, including its LF terminator. */
+                /* Keep the original UART echo behavior for diagnostics. */
                 if (line_length > 0) {
                     int tx_len = uart_write_bytes(SCPI_UART_PORT,
                                                   line_buffer,
@@ -75,6 +76,25 @@ static void scpi_uart_rx_task(void *arg)
             }
         }
     }
+}
+
+esp_err_t scpi_uart_send_volume(int32_t value)
+{
+    char command[32];
+    int length = snprintf(command, sizeof(command), ":VOLUME %ld\n", (long)value);
+    if (length < 0 || length >= (int)sizeof(command)) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    int written = uart_write_bytes(SCPI_UART_PORT, command, (size_t)length);
+    if (written != length) {
+        ESP_LOGE(TAG, "Volume TX failed (written=%d, expected=%d)",
+                 written, length);
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "TX: %.*s", length - 1, command);
+    return ESP_OK;
 }
 
 esp_err_t scpi_uart_init(void)

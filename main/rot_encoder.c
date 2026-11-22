@@ -10,12 +10,15 @@
 #include "esp_timer.h"
 #include "esp_err.h"
 
+#include "scpi_uart.h"
+
 #define ROT_ENCODER_GPIO_A GPIO_NUM_45
 #define ROT_ENCODER_GPIO_B GPIO_NUM_46
 #define ROT_ENCODER_GPIO_SW GPIO_NUM_47
 
 #define ROT_ENCODER_QUEUE_SIZE 8
 #define ROT_ENCODER_BUTTON_DEBOUNCE_US 50000
+#define ROT_ENCODER_VOLUME_LIMIT 1000000
 
 typedef enum {
     ROT_ENCODER_EVENT_RIGHT,
@@ -45,7 +48,7 @@ static void IRAM_ATTR rot_encoder_gpio_isr(void *arg)
     if (gpio == ROT_ENCODER_GPIO_A) {
         if(s_rot_event_dead_time) return;
         s_rot_event_dead_time = true;
-        
+
         bool a_raising = (s_current_a_level == 0); // Aエッジが立ち上がりかどうかはBエッジのときのAレベルを用いて判定する. チャタリングによってエッジ付近はレベルが揺れるのでここでAレベルは読まない
         int b = gpio_get_level(ROT_ENCODER_GPIO_B);
         if((a_raising && !b) || (!a_raising && b)) {
@@ -79,6 +82,7 @@ static void rot_encoder_task(void *arg)
     rot_encoder_event_t event;
     int64_t last_button_time = 0;
     bool button_down = false;
+    int32_t volume_value = 0;
 
     s_current_a_level = gpio_get_level(ROT_ENCODER_GPIO_A);
     while (true) {
@@ -104,10 +108,18 @@ static void rot_encoder_task(void *arg)
         }
 
         if (event.type == ROT_ENCODER_EVENT_RIGHT) {
+            if (volume_value < ROT_ENCODER_VOLUME_LIMIT) {
+                volume_value++;
+            }
+            (void)scpi_uart_send_volume(volume_value);
             if (s_rot_encoder_on_right) {
                 s_rot_encoder_on_right();
             }
         } else if (event.type == ROT_ENCODER_EVENT_LEFT) {
+            if (volume_value > -ROT_ENCODER_VOLUME_LIMIT) {
+                volume_value--;
+            }
+            (void)scpi_uart_send_volume(volume_value);
             if (s_rot_encoder_on_left) {
                 s_rot_encoder_on_left();
             }

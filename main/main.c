@@ -3,6 +3,7 @@
 #include "freertos/task.h"
 #include "esp_timer.h"
 #include "esp_log.h"
+#include "esp_err.h"
 #include "driver/gpio.h"
 #include "esp_chip_info.h"
 #include "esp_netif.h"
@@ -29,6 +30,7 @@
 #include "rot_encoder.h"
 #include "lcd_char2x8.h"
 #include "switch.h"
+#include "scpi_uart.h"
 
 static const char *TAG = "sample";
 
@@ -329,6 +331,7 @@ static void user_button_click(void)
 
 void app_main(void)
 {
+    ESP_ERROR_CHECK(scpi_uart_init());
     esp_log_level_set("dns_redirect_server", ESP_LOG_WARN);
 
     wifiui_page_t* top_page = wifiui_create_page("ESP32-S3 Expand Board");
